@@ -7,6 +7,7 @@
 
 #define MAX_LENGTH 1024
 #define clear_terminal() printf("\033[H\033[J")
+#define TERMINAL_TITLE "Eggshell Terminal"
 
 static char* PATH = "/usr/bin";
 static char* PROMPT = "eggsh> ";
@@ -20,6 +21,7 @@ static char TERMINAL[MAX_LENGTH];
 void eggsh_start();
 void welcome_message();
 void change_directory(char* path);
+void print_header();
 
 int main(int argc, char **argv, char **env) {
 
@@ -41,36 +43,28 @@ int main(int argc, char **argv, char **env) {
 }
 
 void eggsh_start(){
-    struct winsize terminal_size;
-    ioctl(STDIN_FILENO, TIOCGWINSZ, &terminal_size);
+    print_header();
 
-    char* title = "Eggshell Terminal";
-
-    for(int i = 0; i < (terminal_size.ws_col - strlen(title))/2; i++){
-        printf("-");
-    }
-
-    printf("%s", title);
-
-    for(int i = 0; i < (terminal_size.ws_col - strlen(title))/2; i++){
-        printf("-");
-    }
-
-    printf("\n");
-
+    //get USER environmental variable
     USER = getenv("USER");
 
+    //get name of current terminal
     if(ttyname_r(STDIN_FILENO, TERMINAL, MAX_LENGTH) != 0) {
         perror("Cannot get terminal name");
     }
 
+    //get the current working directory
     if(getcwd(CWD, MAX_LENGTH) == NULL) {
         perror("Cannot get current working directory");
     }
 
+    //get the working directory where the shell launched from
     if(getcwd(SHELL, MAX_LENGTH) == NULL) {
         perror("Cannot get shell binary directory");
     }
+
+    //get the search path for external commands
+    PATH = getenv("PATH");
 }
 
 void welcome_message(){
@@ -78,6 +72,7 @@ void welcome_message(){
     printf("Terminal: %s\n", TERMINAL);
     printf("Working Directory: %s\n", CWD);
     printf("Shell Path: %s\n\n", SHELL);
+    printf("Search Path: %s\n", PATH);
 }
 
 void change_directory(char* path){
@@ -88,4 +83,21 @@ void change_directory(char* path){
     }
 
     printf("Directory changed to: %s\n\n", CWD);
+}
+
+void print_header(){
+    struct winsize terminal_size;
+    ioctl(STDIN_FILENO, TIOCGWINSZ, &terminal_size);
+
+    for(int i = 0; i < (terminal_size.ws_col - strlen(TERMINAL_TITLE))/2; i++){
+        printf("-");
+    }
+
+    printf("%s", TERMINAL_TITLE);
+
+    for(int i = 0; i < (terminal_size.ws_col - strlen(TERMINAL_TITLE))/2; i++){
+        printf("-");
+    }
+
+    printf("\n");
 }
