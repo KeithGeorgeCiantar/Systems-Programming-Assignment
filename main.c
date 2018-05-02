@@ -27,10 +27,16 @@ void change_directory(char* path);
 void print_header();
 void get_input();
 
+void auto_complete(const char *buffer, linenoiseCompletions *lc);
+//char* auto_complete_hints(const char *buffer, int *colour, int *bold);
+
 int main(int argc, char **argv, char **env) {
 
     clear_terminal();
     linenoiseClearScreen();
+
+    linenoiseSetCompletionCallback(auto_complete);
+    //linenoiseSetHintsCallback(auto_complete_hints);
 
     eggsh_start();
     welcome_message();
@@ -43,7 +49,7 @@ int main(int argc, char **argv, char **env) {
     return 0;
 }
 
-void eggsh_start(){
+void eggsh_start() {
 
     linenoiseHistorySetMaxLen(10);
 
@@ -109,7 +115,7 @@ void welcome_message(){
     printf("Search Path: %s\n\n", PATH);
 }
 
-void change_directory(char* path){
+void change_directory(char* path) {
     chdir(path);
 
     if(getcwd(CWD, MAX_LENGTH) == NULL) {
@@ -119,27 +125,27 @@ void change_directory(char* path){
     printf("Directory changed to: %s\n\n", CWD);
 }
 
-void print_header(){
+void print_header() {
     struct winsize terminal_size;
     ioctl(STDIN_FILENO, TIOCGWINSZ, &terminal_size);
 
-    for(int i = 0; i < (terminal_size.ws_col - strlen(TERMINAL_TITLE))/2; i++){
+    for(int i = 0; i < (terminal_size.ws_col - strlen(TERMINAL_TITLE))/2; i++) {
         printf("-");
     }
 
     printf("%s", TERMINAL_TITLE);
 
-    for(int i = 0; i < (terminal_size.ws_col - strlen(TERMINAL_TITLE))/2; i++){
+    for(int i = 0; i < (terminal_size.ws_col - strlen(TERMINAL_TITLE))/2; i++) {
         printf("-");
     }
 
     printf("\n");
 }
 
-void get_input(){
-    char *input = "";
+void get_input() {
+    char *input;
     while((input = linenoise(PROMPT)) != NULL) {
-        if (strcmp(input, "exit") == 0 || strcmp(input, "EXIT") == 0 || strcmp(input, "Exit") == 0) {
+        if(strcasecmp(input, "exit") == 0) {
             printf("%s\n", input);
             return;
         }
@@ -149,3 +155,19 @@ void get_input(){
         linenoiseFree(input);
     }
 }
+
+void auto_complete(const char *buffer, linenoiseCompletions *lc) {
+    if(buffer[0] == 'e' || buffer[0] == 'E') {
+        linenoiseAddCompletion(lc, "exit");
+    }
+}
+
+//this is a very useful addition to the program but I think it might be a little intrusive at the moment
+/*char* auto_complete_hints(const char *buffer, int *colour, int *bold) {
+    if(strcasecmp(buffer, "e") == 0) {
+        *colour = 36;
+        *bold = 0;
+        return "xit";
+    }
+    return NULL;
+}*/
