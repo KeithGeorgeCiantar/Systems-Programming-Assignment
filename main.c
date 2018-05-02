@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -24,31 +25,28 @@ void eggsh_start();
 void welcome_message();
 void change_directory(char* path);
 void print_header();
+void get_input();
 
 int main(int argc, char **argv, char **env) {
 
     clear_terminal();
     linenoiseClearScreen();
 
-    char* input;
-
     eggsh_start();
     welcome_message();
+    get_input();
+
 
     //just testing changing of directory
     //change_directory("/home/keithgciantar/Desktop");
-
-    //add while to keep getting input
-    //make the prompt it's own function in a while loop
-
-    input = linenoise(PROMPT);
-
-    printf("%s is your input...\n\n", input);
 
     return 0;
 }
 
 void eggsh_start(){
+
+    linenoiseHistorySetMaxLen(10);
+
     print_header();
 
     static char* buffer;
@@ -136,4 +134,18 @@ void print_header(){
     }
 
     printf("\n");
+}
+
+void get_input(){
+    char *input = "";
+    while((input = linenoise(PROMPT)) != NULL) {
+        if (strcmp(input, "exit") == 0 || strcmp(input, "EXIT") == 0 || strcmp(input, "Exit") == 0) {
+            printf("%s\n", input);
+            return;
+        }
+
+        linenoiseHistoryAdd(input);
+        printf("%s\n", input);
+        linenoiseFree(input);
+    }
 }
