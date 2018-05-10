@@ -14,14 +14,14 @@
 #define clear_terminal() printf("\033[H\033[J")
 #define TERMINAL_TITLE "Eggshell Terminal"
 
-static char* PATH = "";
-static char* PROMPT = "eggsh> ";
-static char CWD[MAX_LENGTH] = "";
-static char* USER = "";
-static char* HOME = "";
-static char SHELL[MAX_LENGTH] = "";
-static char TERMINAL[MAX_LENGTH] = "";
-static int EXTICODE = 0;
+char* PATH = "";
+char* PROMPT = "eggsh> ";
+char CWD[MAX_LENGTH] = "";
+char* USER = "";
+char* HOME = "";
+char SHELL[MAX_LENGTH] = "";
+char TERMINAL[MAX_LENGTH] = "";
+int EXTICODE = 0;
 
 static char SHELL_VAR_NAMES[EDITABLE_SHELL_VARS][MAX_LENGTH];
 
@@ -41,6 +41,8 @@ int check_for_equals(const char input[], int input_length);
 int check_shell_variable_names(const char var_name[]);
 int check_user_variable_names(const char var_name[]);
 void add_new_variable(const char input[], int input_length, int equals_position);
+
+void print_shell_variables();
 void print_user_variables();
 
 void auto_complete(const char *buffer, linenoiseCompletions *lc);
@@ -73,6 +75,8 @@ int main(int argc, char **argv, char **env) {
 void auto_complete(const char *buffer, linenoiseCompletions *lc) {
     if(buffer[0] == 'e' || buffer[0] == 'E') {
         linenoiseAddCompletion(lc, "exit");
+    } else if (buffer[0] == 'a' || buffer[0] == 'A') {
+            linenoiseAddCompletion(lc, "all");
     }
 }
 
@@ -191,6 +195,8 @@ void get_input() {
         if(strcasecmp(input, "exit") == 0) {
             printf("%s\n", input);
             return;
+        } else if (strcasecmp(input, "all") == 0) {
+            print_shell_variables();
         }
 
         linenoiseHistoryAdd(input);
@@ -262,44 +268,60 @@ int check_user_variable_names(const char var_name[]) {
 
 //adding a user created variables if var=value is entered
 void add_new_variable(const char input[], int input_length, int equals_position) {
-    char temp_var_name[MAX_LENGTH];
+    char temp_var_name[MAX_LENGTH] = "";
     strncpy(temp_var_name, input, (size_t) equals_position);
 
-    char temp_var_value[MAX_LENGTH];
+    char temp_var_value[MAX_LENGTH] = "";
     strncpy(temp_var_value, &input[equals_position + 1], (size_t) (input_length - (equals_position + 1)));
-
-    printf("%s, %s\n", temp_var_name, temp_var_value);
-    printf("%d, %d\n", input_length, equals_position);
 
     //checking whether a variable already exists as a shell variable
     int var_position = check_shell_variable_names(temp_var_name);
     if(var_position != -1) { //if the variable already exists as a shell variable, update the the value
+        char *temp_value_pointer = &temp_var_value[0];
         if (strcmp(SHELL_VAR_NAMES[var_position], "PATH") == 0) {
-            strncpy(PATH, temp_var_value, strlen(temp_var_value));
+            PATH = temp_value_pointer;
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "PROMPT") == 0) {
-            strncpy(PROMPT, temp_var_value, strlen(temp_var_value));
+            PROMPT = temp_value_pointer;
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "CWD") == 0) {
-            strncpy(CWD, temp_var_value, strlen(temp_var_value));
+            strcpy(CWD, temp_var_value);
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "USER") == 0) {
-            strncpy(USER, temp_var_value, strlen(temp_var_value));
+            USER = temp_value_pointer;
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "HOME") == 0) {
-            strncpy(HOME, temp_var_value, strlen(temp_var_value));
+            HOME = temp_value_pointer;
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "SHELL") == 0) {
-            strncpy(SHELL, temp_var_value, strlen(temp_var_value));
+            strcpy(SHELL, temp_var_value);
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "TERMINAL") == 0) {
-            strncpy(TERMINAL, temp_var_value, strlen(temp_var_value));
+            strcpy(TERMINAL, temp_var_value);
+        }
+    } else {
+        var_position = check_user_variable_names(temp_var_name);
+
+        if (var_position != -1) { //if the variable already exists as a user added variable, update the the value
+            strncpy(USER_VAR_VALUES[var_position], temp_var_value, strlen(temp_var_value));
+        } else { //if the variable does not exist, add a new variable
+            strncpy(USER_VAR_NAMES[VAR_COUNT], temp_var_name, strlen(temp_var_name));
+            strncpy(USER_VAR_VALUES[VAR_COUNT], temp_var_value, strlen(temp_var_value));
+            VAR_COUNT++;
         }
     }
+}
 
-    var_position = check_user_variable_names(temp_var_name);
-
-    if (var_position != -1) { //if the variable already exists as a user added variable, update the the value
-        strncpy(USER_VAR_VALUES[var_position], temp_var_value, strlen(temp_var_value));
-    } else { //if the variable does not exist, add a new variable
-        strncpy(USER_VAR_NAMES[VAR_COUNT], temp_var_name, strlen(temp_var_name));
-        strncpy(USER_VAR_VALUES[VAR_COUNT], temp_var_value, strlen(temp_var_value));
-        VAR_COUNT++;
-    }
+//print all the shell variables
+void print_shell_variables() {
+    //PATH
+    //PROMPT
+    //CWD
+    //USER
+    //HOME
+    //SHELL
+    //TERMINAL
+    printf("PATH=%s\n", PATH);
+    printf("PROMPT=%s\n", PROMPT);
+    printf("CWD=%s\n", CWD);
+    printf("USER=%s\n", USER);
+    printf("HOME=%s\n", HOME);
+    printf("SHELL=%s\n", SHELL);
+    printf("TERMINAL=%s\n", TERMINAL);
 }
 
 //print all the user variables
