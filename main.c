@@ -31,14 +31,19 @@ static char USER_VAR_VALUES[MAX_LENGTH][MAX_LENGTH];
 static int VAR_COUNT = 0;
 
 void eggsh_init();
+
 void welcome_message();
 
 void change_directory(char *path);
+
 void print_header();
+
 void get_input();
 
 int check_for_char_in_string(const char input[], int input_length, char check_char);
+
 int check_shell_variable_names(const char var_name[]);
+
 int check_user_variable_names(const char var_name[]);
 
 void set_variable(const char input[], int input_length, int equals_position);
@@ -48,6 +53,7 @@ char *get_variable_value(const char var_name[]);
 void clear_string(char input[], int input_length);
 
 void print_shell_variables();
+
 void print_user_variables();
 
 void auto_complete(const char *buffer, linenoiseCompletions *lc);
@@ -196,6 +202,7 @@ void print_header() {
 void get_input() {
     char *input;
     int input_length = 0;
+    char args[MAX_LENGTH][MAX_LENGTH];
     while ((input = linenoise(PROMPT)) != NULL) {
         if (strcasecmp(input, "exit") == 0) {
             printf("%s\n", input);
@@ -214,6 +221,27 @@ void get_input() {
 
         if (equals_position != -1 && equals_position != 0) {
             set_variable(input, input_length, equals_position);
+        }
+
+        for (int i = 0; i < MAX_LENGTH; i++) {
+            clear_string(args[i], MAX_LENGTH);
+        }
+
+        char *token = NULL;
+
+        int token_index = 0;
+
+        token = strtok(input, " ");
+
+        while (token != NULL && token_index < MAX_LENGTH) {
+            strcpy(args[token_index], token);
+            token_index++;
+            token = strtok(NULL, " ");
+        }
+
+
+        for (int i = 0; i < token_index; i++) {
+            printf("%d %s\n", i, args[i]);
         }
 
         if (VAR_COUNT != 0) {
@@ -332,6 +360,9 @@ void set_variable(const char input[], int input_length, int equals_position) {
     }
 }
 
+//function which takes a string as an input and checks
+//if that string is a variable which has a corresponding value
+//if the variable name is found, its name is returned
 char *get_variable_value(const char var_name[]) {
     int var_position = -1;
     char var_value[MAX_LENGTH] = "";
@@ -379,6 +410,7 @@ char *get_variable_value(const char var_name[]) {
     return output_value;
 }
 
+//clear the given string
 void clear_string(char input[], int input_length) {
     for (int i = 0; i < input_length; i++) {
         input[i] = '\0';
