@@ -10,6 +10,7 @@
 
 #define MAX_LENGTH 1024
 #define EDITABLE_SHELL_VARS 7
+#define NUM_INTERNAL_VARS 5
 
 #define clear_terminal() printf("\033[H\033[J")
 #define TERMINAL_TITLE "Eggshell Terminal"
@@ -28,6 +29,8 @@ static char SHELL_VAR_NAMES[EDITABLE_SHELL_VARS][MAX_LENGTH];
 static char USER_VAR_NAMES[MAX_LENGTH][MAX_LENGTH];
 static char USER_VAR_VALUES[MAX_LENGTH][MAX_LENGTH];
 
+static char INTERNAL_COMMANDS[NUM_INTERNAL_VARS][MAX_LENGTH];
+
 static int VAR_COUNT = 0;
 
 void eggsh_init();
@@ -38,7 +41,7 @@ void change_directory(char *path);
 
 void print_header();
 
-void get_input();
+void get_and_process_input();
 
 int check_for_char_in_string(const char input[], int input_length, char check_char);
 
@@ -55,6 +58,8 @@ void clear_string(char input[], int input_length);
 void print_shell_variables();
 
 void print_user_variables();
+
+int check_internal_command(char command[]);
 
 void auto_complete(const char *buffer, linenoiseCompletions *lc);
 //char* auto_complete_hints(const char *buffer, int *colour, int *bold);
@@ -75,7 +80,7 @@ int main(int argc, char **argv, char **env) {
 
     welcome_message();
 
-    get_input();
+    get_and_process_input();
 
     return 0;
 }
@@ -163,6 +168,12 @@ void eggsh_init() {
     strcpy(SHELL_VAR_NAMES[4], "HOME");
     strcpy(SHELL_VAR_NAMES[5], "SHELL");
     strcpy(SHELL_VAR_NAMES[6], "TERMINAL");
+
+    strcpy(INTERNAL_COMMANDS[0], "exit");
+    strcpy(INTERNAL_COMMANDS[1], "print");
+    strcpy(INTERNAL_COMMANDS[2], "chdir");
+    strcpy(INTERNAL_COMMANDS[3], "all");
+    strcpy(INTERNAL_COMMANDS[4], "source");
 }
 
 //print header and welcome message
@@ -199,7 +210,7 @@ void print_header() {
 }
 
 //indefinitely read from the input until 'exit' is entered
-void get_input() {
+void get_and_process_input() {
     char *input;
     int input_length = 0;
     char args[MAX_LENGTH][MAX_LENGTH];
@@ -221,35 +232,35 @@ void get_input() {
 
         if (equals_position != -1 && equals_position != 0) {
             set_variable(input, input_length, equals_position);
-        }
+        } else { //if the input is not var=value, tokenize it
+            for (int i = 0; i < MAX_LENGTH; i++) {
+                clear_string(args[i], MAX_LENGTH);
+            }
 
-        for (int i = 0; i < MAX_LENGTH; i++) {
-            clear_string(args[i], MAX_LENGTH);
-        }
+            char *token = NULL;
 
-        char *token = NULL;
+            int token_index = 0;
 
-        int token_index = 0;
+            token = strtok(input, " ");
 
-        token = strtok(input, " ");
-
-        while (token != NULL && token_index < MAX_LENGTH) {
-            strcpy(args[token_index], token);
-            token_index++;
-            token = strtok(NULL, " ");
-        }
+            while (token != NULL && token_index < MAX_LENGTH) {
+                strcpy(args[token_index], token);
+                token_index++;
+                token = strtok(NULL, " ");
+            }
 
 
-        for (int i = 0; i < token_index; i++) {
-            printf("%d %s\n", i, args[i]);
-        }
+            for (int i = 0; i < token_index; i++) {
+                printf("%d %s\n", i, args[i]);
+            }
 
-        if (VAR_COUNT != 0) {
-            //print_user_variables();
+            if (VAR_COUNT != 0) {
+                //print_user_variables();
+            }
         }
 
         linenoiseFree(input);
-        input = "";
+        clear_string(input, input_length);
     }
 }
 
@@ -441,4 +452,18 @@ void print_user_variables() {
     for (int i = 0; i < VAR_COUNT; i++) {
         printf("%s=%s \n", USER_VAR_NAMES[i], USER_VAR_VALUES[i]);
     }
+}
+
+//check whether the first argument in the input is an internal command
+int check_internal_command(char command[]) {
+    int command_position = -1;
+
+    for (int i = 0; i < NUM_INTERNAL_VARS; i++) {
+        if (strcasecmp(command, INTERNAL_COMMANDS[i]) == 0) {
+            command_position = i;
+            break;
+        }
+    }
+
+    return command_position;
 }
