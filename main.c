@@ -24,14 +24,14 @@ char SHELL[MAX_LENGTH] = "";
 char TERMINAL[MAX_LENGTH] = "";
 int EXTICODE = 0;
 
-static char SHELL_VAR_NAMES[EDITABLE_SHELL_VARS][MAX_LENGTH];
+char SHELL_VAR_NAMES[EDITABLE_SHELL_VARS][MAX_LENGTH];
 
-static char USER_VAR_NAMES[MAX_LENGTH][MAX_LENGTH];
-static char USER_VAR_VALUES[MAX_LENGTH][MAX_LENGTH];
+char USER_VAR_NAMES[MAX_LENGTH][MAX_LENGTH];
+char USER_VAR_VALUES[MAX_LENGTH][MAX_LENGTH];
 
-static char INTERNAL_COMMANDS[NUM_INTERNAL_VARS][MAX_LENGTH];
+char INTERNAL_COMMANDS[NUM_INTERNAL_VARS][MAX_LENGTH];
 
-static int VAR_COUNT = 0;
+int VAR_COUNT = 0;
 
 void eggsh_init();
 
@@ -61,20 +61,11 @@ void print_user_variables();
 
 int check_internal_command(char command[]);
 
-void auto_complete(const char *buffer, linenoiseCompletions *lc);
-//char* auto_complete_hints(const char *buffer, int *colour, int *bold);
-
 int main(int argc, char **argv, char **env) {
 
     //clear any data in the terminal before starting
     clear_terminal();
     linenoiseClearScreen();
-
-    //setup tab autocomplete with the callback auto_complete
-    //the callback will run any time the user presses tab
-    linenoiseSetCompletionCallback(auto_complete);
-
-    //linenoiseSetHintsCallback(auto_complete_hints);
 
     eggsh_init();
 
@@ -84,24 +75,6 @@ int main(int argc, char **argv, char **env) {
 
     return 0;
 }
-
-void auto_complete(const char *buffer, linenoiseCompletions *lc) {
-    if (buffer[0] == 'e' || buffer[0] == 'E') {
-        linenoiseAddCompletion(lc, "exit");
-    } else if (buffer[0] == 'a' || buffer[0] == 'A') {
-        linenoiseAddCompletion(lc, "all");
-    }
-}
-
-//this is a very useful addition to the program but I think it might be a little intrusive at the moment
-/*char* auto_complete_hints(const char *buffer, int *colour, int *bold) {
-    if(strcasecmp(buffer, "e") == 0) {
-        *colour = 36;
-        *bold = 0;
-        return "xit";
-    }
-    return NULL;
-}*/
 
 //initialise shell variables
 void eggsh_init() {
@@ -213,7 +186,7 @@ void print_header() {
 void get_and_process_input() {
     char *input;
     int input_length = 0;
-    char args[MAX_LENGTH][MAX_LENGTH];
+    static char args[MAX_LENGTH][MAX_LENGTH];
     while ((input = linenoise(PROMPT)) != NULL) {
         if (strcasecmp(input, "exit") == 0) {
             printf("%s\n", input);
@@ -237,7 +210,7 @@ void get_and_process_input() {
                 clear_string(args[i], MAX_LENGTH);
             }
 
-            char *token = NULL;
+            char *token = strdup("");
 
             int token_index = 0;
 
@@ -424,7 +397,7 @@ char *get_variable_value(const char var_name[]) {
 //clear the given string
 void clear_string(char input[], int input_length) {
     for (int i = 0; i < input_length; i++) {
-        input[i] = '\0';
+        input[i] = 0;
     }
 }
 
