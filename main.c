@@ -10,7 +10,7 @@
 
 #define MAX_LENGTH 1024
 #define EDITABLE_SHELL_VARS 7
-#define NUM_INTERNAL_VARS 5
+#define NUM_INTERNAL_COMMANDS 5
 
 #define clear_terminal() printf("\033[H\033[J")
 #define TERMINAL_TITLE "Eggshell Terminal"
@@ -29,7 +29,10 @@ char SHELL_VAR_NAMES[EDITABLE_SHELL_VARS][MAX_LENGTH];
 char USER_VAR_NAMES[MAX_LENGTH][MAX_LENGTH];
 char USER_VAR_VALUES[MAX_LENGTH][MAX_LENGTH];
 
-char INTERNAL_COMMANDS[NUM_INTERNAL_VARS][MAX_LENGTH];
+char INTERNAL_COMMANDS[NUM_INTERNAL_COMMANDS][MAX_LENGTH];
+
+char ARGS[MAX_LENGTH][MAX_LENGTH];
+int INPUT_ARGS_COUNT = 0;
 
 int VAR_COUNT = 0;
 
@@ -53,13 +56,21 @@ void set_variable(const char input[], int input_length, int equals_position);
 
 char *get_variable_value(const char var_name[]);
 
+char *get_value_after_dollar(char input[], int input_length);
+
 void clear_string(char input[], int input_length);
 
-void print_shell_variables();
+void print_standard_variables();
 
 void print_user_variables();
 
-int check_internal_command(char command[]);
+int tokenize_input(char input[]);
+
+int check_internal_command(char input[]);
+
+int execute_internal_command(char command[]);
+
+void print_command();
 
 int main(int argc, char **argv, char **env) {
 
@@ -79,7 +90,7 @@ int main(int argc, char **argv, char **env) {
 //initialise shell variables
 void eggsh_init() {
 
-    linenoiseHistorySetMaxLen(10);
+    linenoiseHistorySetMaxLen(25);
 
     //create a buffer to be used by getpwuid_r
     static char *buffer;
@@ -186,15 +197,8 @@ void print_header() {
 void get_and_process_input() {
     char *input;
     int input_length = 0;
-    static char args[MAX_LENGTH][MAX_LENGTH];
-    while ((input = linenoise(PROMPT)) != NULL) {
-        if (strcasecmp(input, "exit") == 0) {
-            printf("%s\n", input);
-            return;
-        } else if (strcasecmp(input, "all") == 0) {
-            print_shell_variables();
-        }
 
+    while ((input = linenoise(PROMPT)) != NULL) {
         linenoiseHistoryAdd(input);
         //printf("%s\n", input);
 
@@ -206,29 +210,16 @@ void get_and_process_input() {
         if (equals_position != -1 && equals_position != 0) {
             set_variable(input, input_length, equals_position);
         } else { //if the input is not var=value, tokenize it
-            for (int i = 0; i < MAX_LENGTH; i++) {
-                clear_string(args[i], MAX_LENGTH);
-            }
 
-            char *token = strdup("");
+            INPUT_ARGS_COUNT = tokenize_input(input);
 
-            int token_index = 0;
+            //check for internal commands
+            int command_position = check_internal_command(ARGS[0]);
 
-            token = strtok(input, " ");
-
-            while (token != NULL && token_index < MAX_LENGTH) {
-                strcpy(args[token_index], token);
-                token_index++;
-                token = strtok(NULL, " ");
-            }
-
-
-            for (int i = 0; i < token_index; i++) {
-                printf("%d %s\n", i, args[i]);
-            }
-
-            if (VAR_COUNT != 0) {
-                //print_user_variables();
+            if (command_position != -1) {
+                if (execute_internal_command(ARGS[0]) == 1) {
+                    break;
+                }
             }
         }
 
@@ -291,16 +282,14 @@ void set_variable(const char input[], int input_length, int equals_position) {
     strncpy(temp_var_value, &input[equals_position + 1], (size_t) (input_length - (equals_position + 1)));
 
     int dollar_position = check_for_char_in_string(input, input_length, '$');
+
     if (dollar_position != -1) {
-        char var_after_dollar[MAX_LENGTH] = "";
-        strncpy(var_after_dollar, &input[dollar_position + 1], (size_t) (input_length - (dollar_position + 1)));
+        char var_with_dollar[MAX_LENGTH] = "";
+        strcpy(var_with_dollar, temp_var_value);
 
-        strcpy(temp_var_value, "");
-        strcpy(temp_var_value, get_variable_value(var_after_dollar));
+        clear_string(temp_var_value, MAX_LENGTH);
 
-        if (strcmp(temp_var_value, "VARIABLE NOT FOUND") == 0) {
-            strncpy(temp_var_value, &input[equals_position + 1], (size_t) (input_length - (equals_position + 1)));
-        }
+        strcpy(temp_var_value, get_value_after_dollar(var_with_dollar, (int) strlen(var_with_dollar)));
     }
 
     //checking whether a variable already exists as a shell variable
@@ -385,13 +374,30 @@ char *get_variable_value(const char var_name[]) {
         if (var_position != -1) {
             strcpy(var_value, USER_VAR_VALUES[var_position]);
         } else {
-            strcpy(var_value, "VARIABLE NOT FOUND");
+            strcpy(var_value, "VALUE NOT FOUND");
         }
     }
 
     char *output_value = &var_value[0];
 
     return output_value;
+}
+
+//returns the value when the input received is '$value'
+char *get_value_after_dollar(char input[], int input_length) {
+    char var_after_dollar[MAX_LENGTH] = "";
+    char *var_value = strdup("");
+
+    strncpy(var_after_dollar, &input[1], (size_t) (input_length - 1));
+
+    strcpy(var_value, get_variable_value(var_after_dollar));
+
+    if (strcmp(var_value, "VALUE NOT FOUND") == 0) {
+        clear_string(var_value, (int) strlen(var_value));
+        strncpy(var_value, input, (size_t) (input_length));
+    }
+
+    return var_value;
 }
 
 //clear the given string
@@ -401,8 +407,8 @@ void clear_string(char input[], int input_length) {
     }
 }
 
-//print all the shell variables
-void print_shell_variables() {
+//print all the standard variables
+void print_standard_variables() {
     //PATH
     //PROMPT
     //CWD
@@ -417,7 +423,6 @@ void print_shell_variables() {
     printf("HOME=%s\n", HOME);
     printf("SHELL=%s\n", SHELL);
     printf("TERMINAL=%s\n", TERMINAL);
-    print_user_variables();
 }
 
 //print all the user variables
@@ -427,16 +432,128 @@ void print_user_variables() {
     }
 }
 
+int tokenize_input(char input[]) {
+    char *token = strdup("");
+    int token_index = 0;
+
+    for (int i = 0; i < MAX_LENGTH; i++) {
+        clear_string(ARGS[i], MAX_LENGTH);
+    }
+
+    token = strtok(input, " ");
+
+    while (token != NULL && token_index < MAX_LENGTH) {
+        strcpy(ARGS[token_index], token);
+        token_index++;
+        token = strtok(NULL, " ");
+    }
+
+    return token_index;
+}
+
 //check whether the first argument in the input is an internal command
-int check_internal_command(char command[]) {
+int check_internal_command(char input[]) {
     int command_position = -1;
 
-    for (int i = 0; i < NUM_INTERNAL_VARS; i++) {
-        if (strcasecmp(command, INTERNAL_COMMANDS[i]) == 0) {
+    for (int i = 0; i < NUM_INTERNAL_COMMANDS; i++) {
+        if (strcasecmp(input, INTERNAL_COMMANDS[i]) == 0) {
             command_position = i;
             break;
         }
     }
 
     return command_position;
+}
+
+//execute an internal command depending on the first argument
+int execute_internal_command(char command[]) {
+    int exit = 0;
+
+    if (strcasecmp(command, "exit") == 0) {
+        exit = 1;
+    } else if (strcasecmp(command, "print") == 0) {
+        print_command();
+    } else if (strcasecmp(command, "chdir") == 0) {
+
+    } else if (strcasecmp(command, "all") == 0) {
+        print_standard_variables();
+        print_user_variables();
+    } else if (strcasecmp(command, "source") == 0) {
+
+    }
+
+    return exit;
+}
+
+//functions which prints the input, similar to echo
+void print_command() {
+    int quotes_num = 0;
+    int print_literal = 0;
+
+    //check for only one word with two ""
+    if (ARGS[1][0] == '"' && ARGS[1][strlen(ARGS[1]) - 1] == '"') {
+        printf("%.*s\n", (int) (strlen(ARGS[1]) - 2), &ARGS[1][1]);
+        return;
+    }
+
+    //check for a single " in the start or end of each ARG
+    for (int i = 1; i < INPUT_ARGS_COUNT; i++) {
+        if (ARGS[i][0] == '"') {
+            quotes_num++;
+        }
+
+        if (ARGS[i][strlen(ARGS[i]) - 1] == '"') {
+            quotes_num++;
+        }
+    }
+
+    if (quotes_num < 2) {
+        for (int i = 1; i < INPUT_ARGS_COUNT; i++) {
+            if (ARGS[i][0] == '$') {
+                if (strcasecmp(get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])), "") != 0) {
+                    printf("%s ", get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])));
+                } else {
+                    printf("%s ", ARGS[i]);
+                }
+            } else {
+                printf("%s ", ARGS[i]);
+            }
+        }
+        printf("\n");
+    } else {
+        for (int i = 1; i < INPUT_ARGS_COUNT; i++) {
+            if (print_literal == 0) {
+                //checking for special case
+                if (ARGS[i][0] == '"' && ARGS[i][strlen(ARGS[i]) - 1] == '"') {
+                    printf("%.*s ", (int) (strlen(ARGS[i]) - 2), &ARGS[i][1]);
+                } else {
+                    //assuming first quote is the beginning of a string
+                    if (ARGS[i][0] == '"') {
+                        printf("%s ", ARGS[i] + 1);
+                        print_literal = 1;
+                    } else {
+                        if (ARGS[i][0] == '$') {
+                            if (strcasecmp(get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])), "") != 0) {
+                                printf("%s ", get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])));
+                            } else {
+                                printf("%s ", ARGS[i]);
+                            }
+                        } else {
+                            printf("%s ", ARGS[i]);
+                        }
+                    }
+                }
+            } else {
+                //assuming second quote is in the end of a string
+                int second_quote = check_for_char_in_string(ARGS[i], (int) strlen(ARGS[i]), '"');
+                if (second_quote != -1) {
+                    printf("%.*s ", second_quote, ARGS[i]);
+                    print_literal = 0;
+                } else {
+                    printf("%s ", ARGS[i]);
+                }
+            }
+        }
+        printf("\n");
+    }
 }
