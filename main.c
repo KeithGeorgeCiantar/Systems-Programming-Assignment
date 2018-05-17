@@ -8,20 +8,20 @@
 #include <sys/types.h>
 #include "linenoise.h"
 
-#define MAX_LENGTH 1024
+#define MAX_LENGTH 300
 #define EDITABLE_SHELL_VARS 7
 #define NUM_INTERNAL_COMMANDS 5
 
 #define clear_terminal() printf("\033[H\033[J")
 #define TERMINAL_TITLE "Eggshell Terminal"
 
-char *PATH = "";
+char PATH[MAX_LENGTH] = {0};
 char *PROMPT = "eggsh> ";
-char CWD[MAX_LENGTH] = "";
-char *USER = "";
-char *HOME = "";
-char SHELL[MAX_LENGTH] = "";
-char TERMINAL[MAX_LENGTH] = "";
+char CWD[MAX_LENGTH] = {0};
+char USER[MAX_LENGTH] = {0};
+char HOME[MAX_LENGTH] = {0};
+char SHELL[MAX_LENGTH] = {0};
+char TERMINAL[MAX_LENGTH] = {0};
 int EXTICODE = 0;
 
 char SHELL_VAR_NAMES[EDITABLE_SHELL_VARS][MAX_LENGTH];
@@ -39,8 +39,6 @@ int VAR_COUNT = 0;
 void eggsh_init();
 
 void welcome_message();
-
-void change_directory(char *path);
 
 void print_header();
 
@@ -66,11 +64,13 @@ void print_user_variables();
 
 int tokenize_input(char input[]);
 
-int check_internal_command(char input[]);
+int check_internal_command(const char input[]);
 
-int execute_internal_command(char command[]);
+int execute_internal_command(const char command[]);
 
 void print_command();
+
+void change_directory(char path[]);
 
 int main(int argc, char **argv, char **env) {
 
@@ -89,40 +89,16 @@ int main(int argc, char **argv, char **env) {
 
 //initialise shell variables
 void eggsh_init() {
-
-    linenoiseHistorySetMaxLen(25);
-
-    //create a buffer to be used by getpwuid_r
-    static char *buffer;
-    size_t buffer_size = (size_t) sysconf(_SC_GETPW_R_SIZE_MAX);
-
-    if (buffer_size == -1) {
-        buffer_size = 16 * MAX_LENGTH;
-    }
-
-    buffer = malloc(buffer_size);
-
-    //get the HOME and USER shell variables by using getpwuid_r
-    struct passwd pwd;
-    struct passwd *user_details;
-    int out = getpwuid_r(getuid(), &pwd, buffer, buffer_size, &user_details);
-    if (user_details != NULL) {
-        if (out == 0) {
-            USER = user_details->pw_name;
-            HOME = user_details->pw_dir;
-        }
-    }
-
-    free(buffer);
-
     //get the HOME environmental variable
     if (getenv("HOME") != NULL && HOME != "") {
-        HOME = getenv("HOME");
+        char *temp_home = getenv("HOME");
+        strncpy(HOME, temp_home, strlen(temp_home));
     }
 
     //get the USER environmental variable
     if (getenv("USER") != NULL && USER != "") {
-        USER = getenv("USER");
+        char *temp_user = getenv("USER");
+        strncpy(USER, temp_user, strlen(temp_user));
     }
 
     //get the working directory where the shell launched from
@@ -132,48 +108,39 @@ void eggsh_init() {
 
     //get the name of current terminal
     if (ttyname_r(STDIN_FILENO, TERMINAL, MAX_LENGTH) != 0) {
-        perror("Cannot get terminal name.\n");
+        perror("Cannot get terminal name.");
     }
 
     //get the current working directory
     if (getcwd(CWD, MAX_LENGTH) == NULL) {
-        perror("Cannot get current working directory.\n");
+        perror("Cannot get current working directory.");
     }
 
     //get the search path for external commands
     if (getenv("PATH") != NULL) {
-        PATH = getenv("PATH");
+        char *temp_path = getenv("PATH");
+        strncpy(PATH, temp_path, strlen(temp_path));
     }
 
-    strcpy(SHELL_VAR_NAMES[0], "PATH");
-    strcpy(SHELL_VAR_NAMES[1], "PROMPT");
-    strcpy(SHELL_VAR_NAMES[2], "CWD");
-    strcpy(SHELL_VAR_NAMES[3], "USER");
-    strcpy(SHELL_VAR_NAMES[4], "HOME");
-    strcpy(SHELL_VAR_NAMES[5], "SHELL");
-    strcpy(SHELL_VAR_NAMES[6], "TERMINAL");
+    strncpy(SHELL_VAR_NAMES[0], "PATH", strlen("PATH"));
+    strncpy(SHELL_VAR_NAMES[1], "PROMPT", strlen("PROMPT"));
+    strncpy(SHELL_VAR_NAMES[2], "CWD", strlen("CWD"));
+    strncpy(SHELL_VAR_NAMES[3], "USER", strlen("USER"));
+    strncpy(SHELL_VAR_NAMES[4], "HOME", strlen("HOME"));
+    strncpy(SHELL_VAR_NAMES[5], "SHELL", strlen("SHELL"));
+    strncpy(SHELL_VAR_NAMES[6], "TERMINAL", strlen("TERMINAL"));
 
-    strcpy(INTERNAL_COMMANDS[0], "exit");
-    strcpy(INTERNAL_COMMANDS[1], "print");
-    strcpy(INTERNAL_COMMANDS[2], "chdir");
-    strcpy(INTERNAL_COMMANDS[3], "all");
-    strcpy(INTERNAL_COMMANDS[4], "source");
+    strncpy(INTERNAL_COMMANDS[0], "exit", strlen("exit"));
+    strncpy(INTERNAL_COMMANDS[1], "print", strlen("print"));
+    strncpy(INTERNAL_COMMANDS[2], "chdir", strlen("chdir"));
+    strncpy(INTERNAL_COMMANDS[3], "all", strlen("all"));
+    strncpy(INTERNAL_COMMANDS[4], "source", strlen("source"));
 }
 
 //print header and welcome message
 void welcome_message() {
     print_header();
     printf("Welcome %s!\n", USER);
-}
-
-void change_directory(char *path) {
-    chdir(path);
-
-    if (getcwd(CWD, MAX_LENGTH) == NULL) {
-        perror("Cannot get current working directory");
-    }
-
-    printf("Directory changed to: %s\n\n", CWD);
 }
 
 void print_header() {
@@ -199,9 +166,6 @@ void get_and_process_input() {
     int input_length = 0;
 
     while ((input = linenoise(PROMPT)) != NULL) {
-        linenoiseHistoryAdd(input);
-        //printf("%s\n", input);
-
         input_length = (int) strlen(input);
 
         //checking for var=value
@@ -275,17 +239,17 @@ int check_user_variable_names(const char var_name[]) {
 
 //adding a user created variables if var=value is entered
 void set_variable(const char input[], int input_length, int equals_position) {
-    char temp_var_name[MAX_LENGTH] = "";
+    char temp_var_name[MAX_LENGTH] = {0};
     strncpy(temp_var_name, input, (size_t) equals_position);
 
-    char temp_var_value[MAX_LENGTH] = "";
+    char temp_var_value[MAX_LENGTH] = {0};
     strncpy(temp_var_value, &input[equals_position + 1], (size_t) (input_length - (equals_position + 1)));
 
     int dollar_position = check_for_char_in_string(input, input_length, '$');
 
     if (dollar_position != -1) {
-        char var_with_dollar[MAX_LENGTH] = "";
-        strcpy(var_with_dollar, temp_var_value);
+        char var_with_dollar[MAX_LENGTH] = {0};
+        strncpy(var_with_dollar, temp_var_value, strlen(temp_var_value));
 
         clear_string(temp_var_value, MAX_LENGTH);
 
@@ -294,30 +258,29 @@ void set_variable(const char input[], int input_length, int equals_position) {
 
     //checking whether a variable already exists as a shell variable
     int var_position = check_shell_variable_names(temp_var_name);
-    if (var_position != -1) { //if the variable already exists as a shell variable, update the the value
-        char *temp_value_pointer = &temp_var_value[0];
 
+    if (var_position != -1) { //if the variable already exists as a shell variable, update the the value
         if (strcmp(SHELL_VAR_NAMES[var_position], "PATH") == 0) {
-            clear_string(USER_VAR_VALUES[var_position], (int) strlen(PATH));
-            PATH = temp_value_pointer;
+            clear_string(PATH, (int) strlen(PATH));
+            strncpy(PATH, temp_var_value, strlen(temp_var_value));
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "PROMPT") == 0) {
-            clear_string(USER_VAR_VALUES[var_position], (int) strlen(PROMPT));
-            PROMPT = temp_value_pointer;
+            clear_string(PROMPT, (int) strlen(PROMPT));
+            strncpy(PROMPT, temp_var_value, strlen(temp_var_value));
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "CWD") == 0) {
-            clear_string(USER_VAR_VALUES[var_position], (int) strlen(CWD));
-            strcpy(CWD, temp_var_value);
+            clear_string(CWD, (int) strlen(CWD));
+            strncpy(CWD, temp_var_value, strlen(temp_var_value));
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "USER") == 0) {
-            clear_string(USER_VAR_VALUES[var_position], (int) strlen(USER));
-            USER = temp_value_pointer;
+            clear_string(USER, (int) strlen(USER));
+            strncpy(USER, temp_var_value, strlen(temp_var_value));
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "HOME") == 0) {
-            clear_string(USER_VAR_VALUES[var_position], (int) strlen(HOME));
-            HOME = temp_value_pointer;
+            clear_string(HOME, (int) strlen(HOME));
+            strncpy(HOME, temp_var_value, strlen(temp_var_value));
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "SHELL") == 0) {
-            clear_string(USER_VAR_VALUES[var_position], (int) strlen(SHELL));
-            strcpy(SHELL, temp_var_value);
+            clear_string(SHELL, (int) strlen(SHELL));
+            strncpy(SHELL, temp_var_value, strlen(temp_var_value));
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "TERMINAL") == 0) {
-            clear_string(USER_VAR_VALUES[var_position], (int) strlen(TERMINAL));
-            strcpy(TERMINAL, temp_var_value);
+            clear_string(TERMINAL, (int) strlen(TERMINAL));
+            strncpy(TERMINAL, temp_var_value, strlen(temp_var_value));
         }
     } else {
         var_position = check_user_variable_names(temp_var_name);
@@ -338,7 +301,6 @@ void set_variable(const char input[], int input_length, int equals_position) {
 //if the variable name is found, its name is returned
 char *get_variable_value(const char var_name[]) {
     int var_position = -1;
-    char var_value[MAX_LENGTH] = "";
 
     for (int i = 0; i < EDITABLE_SHELL_VARS; i++) {
         if (strcmp(SHELL_VAR_NAMES[i], var_name) == 0) {
@@ -349,19 +311,19 @@ char *get_variable_value(const char var_name[]) {
 
     if (var_position != -1) {
         if (strcmp(SHELL_VAR_NAMES[var_position], "PATH") == 0) {
-            strcpy(var_value, PATH);
+            return PATH;
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "PROMPT") == 0) {
-            strcpy(var_value, PROMPT);
+            return PROMPT;
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "CWD") == 0) {
-            strcpy(var_value, CWD);
+            return CWD;
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "USER") == 0) {
-            strcpy(var_value, USER);
+            return USER;
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "HOME") == 0) {
-            strcpy(var_value, HOME);
+            return HOME;
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "SHELL") == 0) {
-            strcpy(var_value, SHELL);
+            return SHELL;
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "TERMINAL") == 0) {
-            strcpy(var_value, TERMINAL);
+            return TERMINAL;
         }
     } else {
         for (int i = 0; i < VAR_COUNT; i++) {
@@ -372,20 +334,16 @@ char *get_variable_value(const char var_name[]) {
         }
 
         if (var_position != -1) {
-            strcpy(var_value, USER_VAR_VALUES[var_position]);
+            return USER_VAR_VALUES[var_position];
         } else {
-            strcpy(var_value, "VALUE NOT FOUND");
+            return "VALUE NOT FOUND";
         }
     }
-
-    char *output_value = &var_value[0];
-
-    return output_value;
 }
 
 //returns the value when the input received is '$value'
 char *get_value_after_dollar(char input[], int input_length) {
-    char var_after_dollar[MAX_LENGTH] = "";
+    char var_after_dollar[MAX_LENGTH] = {0};
     char *var_value = strdup("");
 
     strncpy(var_after_dollar, &input[1], (size_t) (input_length - 1));
@@ -395,9 +353,10 @@ char *get_value_after_dollar(char input[], int input_length) {
     if (strcmp(var_value, "VALUE NOT FOUND") == 0) {
         clear_string(var_value, (int) strlen(var_value));
         strncpy(var_value, input, (size_t) (input_length));
+        return input;
+    } else {
+        return get_variable_value(var_after_dollar);
     }
-
-    return var_value;
 }
 
 //clear the given string
@@ -433,7 +392,7 @@ void print_user_variables() {
 }
 
 int tokenize_input(char input[]) {
-    char *token = strdup("");
+    char *token;
     int token_index = 0;
 
     for (int i = 0; i < MAX_LENGTH; i++) {
@@ -443,7 +402,7 @@ int tokenize_input(char input[]) {
     token = strtok(input, " ");
 
     while (token != NULL && token_index < MAX_LENGTH) {
-        strcpy(ARGS[token_index], token);
+        strncpy(ARGS[token_index], token, strlen(token));
         token_index++;
         token = strtok(NULL, " ");
     }
@@ -452,7 +411,7 @@ int tokenize_input(char input[]) {
 }
 
 //check whether the first argument in the input is an internal command
-int check_internal_command(char input[]) {
+int check_internal_command(const char input[]) {
     int command_position = -1;
 
     for (int i = 0; i < NUM_INTERNAL_COMMANDS; i++) {
@@ -466,7 +425,7 @@ int check_internal_command(char input[]) {
 }
 
 //execute an internal command depending on the first argument
-int execute_internal_command(char command[]) {
+int execute_internal_command(const char command[]) {
     int exit = 0;
 
     if (strcasecmp(command, "exit") == 0) {
@@ -474,7 +433,7 @@ int execute_internal_command(char command[]) {
     } else if (strcasecmp(command, "print") == 0) {
         print_command();
     } else if (strcasecmp(command, "chdir") == 0) {
-
+        change_directory(ARGS[1]);
     } else if (strcasecmp(command, "all") == 0) {
         print_standard_variables();
         print_user_variables();
@@ -491,7 +450,7 @@ void print_command() {
     int print_literal = 0;
 
     //check for only one word with two ""
-    if (ARGS[1][0] == '"' && ARGS[1][strlen(ARGS[1]) - 1] == '"') {
+    if (ARGS[1][0] == '"' && ARGS[1][strlen(ARGS[1]) - 1] == '"' && strlen(ARGS[1]) > 1) {
         printf("%.*s\n", (int) (strlen(ARGS[1]) - 2), &ARGS[1][1]);
         return;
     }
@@ -502,8 +461,10 @@ void print_command() {
             quotes_num++;
         }
 
-        if (ARGS[i][strlen(ARGS[i]) - 1] == '"') {
-            quotes_num++;
+        if (strlen(ARGS[i]) > 1) {
+            if (ARGS[i][strlen(ARGS[i]) - 1] == '"') {
+                quotes_num++;
+            }
         }
     }
 
@@ -524,13 +485,17 @@ void print_command() {
         for (int i = 1; i < INPUT_ARGS_COUNT; i++) {
             if (print_literal == 0) {
                 //checking for special case
-                if (ARGS[i][0] == '"' && ARGS[i][strlen(ARGS[i]) - 1] == '"') {
+                if (ARGS[i][0] == '"' && ARGS[i][strlen(ARGS[i]) - 1] == '"' && strlen(ARGS[i]) > 1) {
                     printf("%.*s ", (int) (strlen(ARGS[i]) - 2), &ARGS[i][1]);
                 } else {
                     //assuming first quote is the beginning of a string
                     if (ARGS[i][0] == '"') {
-                        printf("%s ", ARGS[i] + 1);
-                        print_literal = 1;
+                        if (strlen(ARGS[i]) > 1) {
+                            printf("%s ", ARGS[i] + 1);
+                            print_literal = 1;
+                        } else {
+                            print_literal = 1;
+                        }
                     } else {
                         if (ARGS[i][0] == '$') {
                             if (strcasecmp(get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])), "") != 0) {
@@ -547,13 +512,30 @@ void print_command() {
                 //assuming second quote is in the end of a string
                 int second_quote = check_for_char_in_string(ARGS[i], (int) strlen(ARGS[i]), '"');
                 if (second_quote != -1) {
-                    printf("%.*s ", second_quote, ARGS[i]);
-                    print_literal = 0;
+                    if (strlen(ARGS[i]) > 1) {
+                        printf("%.*s ", second_quote, ARGS[i]);
+                        print_literal = 0;
+                    } else {
+                        print_literal = 0;
+                    }
                 } else {
                     printf("%s ", ARGS[i]);
                 }
             }
+
         }
         printf("\n");
+    }
+}
+
+
+void change_directory(char path[]) {
+    if (chdir(path) != 0) {
+        perror("Cannot change directory.");
+    } else {
+        clear_string(CWD, MAX_LENGTH);
+        if (getcwd(CWD, MAX_LENGTH) == NULL) {
+            perror("Cannot set current working directory.");
+        }
     }
 }
