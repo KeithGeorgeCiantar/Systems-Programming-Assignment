@@ -162,10 +162,13 @@ void print_header() {
 
 //indefinitely read from the input until 'exit' is entered
 void get_and_process_input() {
-    char *input;
+    char *input = "";
     int input_length = 0;
 
+    fflush(STDIN_FILENO);
+
     while ((input = linenoise(PROMPT)) != NULL) {
+
         input_length = (int) strlen(input);
 
         //checking for var=value
@@ -187,8 +190,8 @@ void get_and_process_input() {
             }
         }
 
-        linenoiseFree(input);
         clear_string(input, input_length);
+        linenoiseFree(input);
     }
 }
 
@@ -530,12 +533,37 @@ void print_command() {
 
 
 void change_directory(char path[]) {
-    if (chdir(path) != 0) {
-        perror("Cannot change directory.");
+    int last_slash_pos = 0;
+    char cwd_before_change[MAX_LENGTH];
+
+    strncpy(cwd_before_change, CWD, strlen(CWD));
+
+    if (strcasecmp(path, "..") != 0) {
+        if (chdir(path) != 0) {
+            perror("Cannot change directory.");
+        } else {
+            clear_string(CWD, MAX_LENGTH);
+            if (getcwd(CWD, MAX_LENGTH) == NULL) {
+                perror("Cannot set current working directory.");
+            }
+        }
     } else {
-        clear_string(CWD, MAX_LENGTH);
-        if (getcwd(CWD, MAX_LENGTH) == NULL) {
-            perror("Cannot set current working directory.");
+        if (strcmp(CWD, HOME) != 0) {
+            for (int i = (int) strlen(CWD) - 1; i >= 0; i--) {
+                if (CWD[i] == '/') {
+                    last_slash_pos = i;
+                    break;
+                }
+            }
+
+            for (int i = last_slash_pos; i < (int) strlen(CWD); i++) {
+                CWD[i] = '\0';
+            }
+
+            if (chdir(CWD) != 0) {
+                perror("Cannot change directory.");
+                strncpy(CWD, cwd_before_change, strlen(cwd_before_change));
+            }
         }
     }
 }
