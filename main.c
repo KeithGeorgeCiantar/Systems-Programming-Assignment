@@ -78,6 +78,8 @@ int main(int argc, char **argv, char **env) {
     clear_terminal();
     linenoiseClearScreen();
 
+    linenoiseHistorySetMaxLen(10);
+
     eggsh_init();
 
     welcome_message();
@@ -102,7 +104,7 @@ void eggsh_init() {
     }
 
     //get the working directory where the shell launched from
-    if (getcwd(SHELL, MAX_LENGTH) == NULL) {
+    if (getcwd(SHELL, sizeof(SHELL)) == NULL) {
         perror("Cannot get shell binary directory.\n");
     }
 
@@ -112,7 +114,7 @@ void eggsh_init() {
     }
 
     //get the current working directory
-    if (getcwd(CWD, MAX_LENGTH) == NULL) {
+    if (getcwd(CWD, sizeof(CWD)) == NULL) {
         perror("Cannot get current working directory.");
     }
 
@@ -168,6 +170,8 @@ void get_and_process_input() {
     fflush(STDIN_FILENO);
 
     while ((input = linenoise(PROMPT)) != NULL) {
+
+        linenoiseHistoryAdd(input);
 
         input_length = (int) strlen(input);
 
@@ -347,15 +351,10 @@ char *get_variable_value(const char var_name[]) {
 //returns the value when the input received is '$value'
 char *get_value_after_dollar(char input[], int input_length) {
     char var_after_dollar[MAX_LENGTH] = {0};
-    char *var_value = strdup("");
 
     strncpy(var_after_dollar, &input[1], (size_t) (input_length - 1));
 
-    strcpy(var_value, get_variable_value(var_after_dollar));
-
-    if (strcmp(var_value, "VALUE NOT FOUND") == 0) {
-        clear_string(var_value, (int) strlen(var_value));
-        strncpy(var_value, input, (size_t) (input_length));
+    if (strcmp(get_variable_value(var_after_dollar), "VALUE NOT FOUND") == 0) {
         return input;
     } else {
         return get_variable_value(var_after_dollar);
@@ -543,7 +542,7 @@ void change_directory(char path[]) {
             perror("Cannot change directory.");
         } else {
             clear_string(CWD, MAX_LENGTH);
-            if (getcwd(CWD, MAX_LENGTH) == NULL) {
+            if (getcwd(CWD, sizeof(CWD)) == NULL) {
                 perror("Cannot set current working directory.");
             }
         }
