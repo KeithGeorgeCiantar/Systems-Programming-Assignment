@@ -94,20 +94,27 @@ int main(int argc, char **argv, char **env) {
 //initialise shell variables
 void eggsh_init() {
     //get the HOME environmental variable
-    if (getenv("HOME") != NULL && HOME != "") {
+    if (getenv("HOME") != NULL) {
         char *temp_home = getenv("HOME");
         strncpy(HOME, temp_home, strlen(temp_home));
+    } else {
+        perror("Cannot get USER environment variable");
     }
 
     //get the USER environmental variable
-    if (getenv("USER") != NULL && USER != "") {
+    if (getenv("USER") != NULL) {
         char *temp_user = getenv("USER");
         strncpy(USER, temp_user, strlen(temp_user));
+    } else {
+        perror("Cannot get HOME environment variable");
     }
 
-    //get the working directory where the shell launched from
-    if (getcwd(SHELL, sizeof(SHELL)) == NULL) {
-        perror("Cannot get shell binary directory.\n");
+    //get the SHELL environmental variable
+    if (getenv("SHELL") != NULL) {
+        char *temp_shell = getenv("SHELL");
+        strncpy(SHELL, temp_shell, strlen(temp_shell));
+    } else {
+        perror("Cannot get SHELL environment variable");
     }
 
     //get the name of current terminal
@@ -117,7 +124,7 @@ void eggsh_init() {
 
     //get the current working directory
     if (getcwd(CWD, sizeof(CWD)) == NULL) {
-        perror("Cannot get current working directory.");
+        perror("Cannot get current working directory");
     }
 
     //get the search path for external commands
@@ -183,7 +190,7 @@ void get_and_process_input() {
         //checking for var=value
         int equals_position = check_for_char_in_string(input, input_length, '=');
 
-        if (equals_position != -1 && equals_position != 0 && equals_position != input_length - 1) {
+        if (equals_position != -1 && equals_position != 0) {
             set_variable(input, input_length, equals_position);
         } else { //if the input is not var=value, tokenize it
 
@@ -280,6 +287,11 @@ void set_variable(const char input[], int input_length, int equals_position) {
         return;
     }
 
+    if (equals_position == input_length - 1) {
+        printf("Invalid variable name.\n");
+        return;
+    }
+
     char temp_var_value[MAX_LENGTH] = {0};
     strncpy(temp_var_value, &input[equals_position + 1], (size_t) (input_length - (equals_position + 1)));
 
@@ -299,23 +311,43 @@ void set_variable(const char input[], int input_length, int equals_position) {
 
     if (var_position != -1) { //if the variable already exists as a shell variable, update the the value
         if (strcmp(SHELL_VAR_NAMES[var_position], "PATH") == 0) {
-            clear_string(PATH, (int) strlen(PATH));
-            strncpy(PATH, temp_var_value, strlen(temp_var_value));
+            if (setenv("PATH", temp_var_value, 1) != 0) {
+                perror("Cannot set variable PATH");
+            } else {
+                clear_string(PATH, (int) strlen(PATH));
+                strncpy(PATH, temp_var_value, strlen(temp_var_value));
+            }
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "PROMPT") == 0) {
             clear_string(PROMPT, (int) strlen(PROMPT));
             strncpy(PROMPT, temp_var_value, strlen(temp_var_value));
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "CWD") == 0) {
-            clear_string(CWD, (int) strlen(CWD));
-            strncpy(CWD, temp_var_value, strlen(temp_var_value));
+            if (chdir(temp_var_value) != 0) {
+                perror("Cannot change directory");
+            } else {
+                clear_string(CWD, (int) strlen(CWD));
+                strncpy(CWD, temp_var_value, strlen(temp_var_value));
+            }
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "USER") == 0) {
-            clear_string(USER, (int) strlen(USER));
-            strncpy(USER, temp_var_value, strlen(temp_var_value));
+            if (setenv("USER", temp_var_value, 1) != 0) {
+                perror("Cannot set variable USER");
+            } else {
+                clear_string(USER, (int) strlen(USER));
+                strncpy(USER, temp_var_value, strlen(temp_var_value));
+            }
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "HOME") == 0) {
-            clear_string(HOME, (int) strlen(HOME));
-            strncpy(HOME, temp_var_value, strlen(temp_var_value));
+            if (setenv("HOME", temp_var_value, 1) != 0) {
+                perror("Cannot set variable HOME");
+            } else {
+                clear_string(HOME, (int) strlen(USER));
+                strncpy(HOME, temp_var_value, strlen(temp_var_value));
+            }
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "SHELL") == 0) {
-            clear_string(SHELL, (int) strlen(SHELL));
-            strncpy(SHELL, temp_var_value, strlen(temp_var_value));
+            if (setenv("SHELL", temp_var_value, 1) != 0) {
+                perror("Cannot set variable SHELL");
+            } else {
+                clear_string(SHELL, (int) strlen(USER));
+                strncpy(SHELL, temp_var_value, strlen(temp_var_value));
+            }
         } else if (strcmp(SHELL_VAR_NAMES[var_position], "TERMINAL") == 0) {
             clear_string(TERMINAL, (int) strlen(TERMINAL));
             strncpy(TERMINAL, temp_var_value, strlen(temp_var_value));
@@ -331,6 +363,7 @@ void set_variable(const char input[], int input_length, int equals_position) {
             strncpy(USER_VAR_VALUES[VAR_COUNT], temp_var_value, strlen(temp_var_value));
             VAR_COUNT++;
         }
+        setenv(temp_var_name, temp_var_value, 1);
     }
 }
 
@@ -594,11 +627,11 @@ void change_directory(char path[]) {
 
     if (strcasecmp(path, "..") != 0) {
         if (chdir(path) != 0) {
-            perror("Cannot change directory.");
+            perror("Cannot change directory");
         } else {
             clear_string(CWD, MAX_LENGTH);
             if (getcwd(CWD, sizeof(CWD)) == NULL) {
-                perror("Cannot set current working directory.");
+                perror("Cannot set current working directory");
             }
         }
     } else {
@@ -615,7 +648,7 @@ void change_directory(char path[]) {
             }
 
             if (chdir(CWD) != 0) {
-                perror("Cannot change directory.");
+                perror("Cannot change directory");
                 strncpy(CWD, cwd_before_change, strlen(cwd_before_change));
             }
         }
