@@ -285,7 +285,9 @@ void set_variable(const char input[], int input_length, int equals_position) {
 
     int dollar_position = check_for_char_in_string(input, input_length, '$');
 
-    if (dollar_position != -1) {
+    printf("%d, %d\n", dollar_position, equals_position);
+
+    if (dollar_position == (equals_position + 1)) {
         char var_with_dollar[MAX_LENGTH] = {0};
         strncpy(var_with_dollar, temp_var_value, strlen(temp_var_value));
 
@@ -508,37 +510,71 @@ void print_command() {
 
     if (quotes_num < 2) {
         for (int i = 1; i < INPUT_ARGS_COUNT; i++) {
-            if (ARGS[i][0] == '"') {
-                if (ARGS[i][1] == '$') {
-                    if (strcasecmp(get_value_after_dollar(&ARGS[i][1], (int) strlen(ARGS[i]) - 1), "") != 0) {
-                        printf("%s ", get_value_after_dollar(&ARGS[i][1], (int) strlen(ARGS[i]) - 1));
+            if (strcasecmp(ARGS[i], "\"") != 0) { //checking for only quote and don't print it
+                if (ARGS[i][0] == '"') { //quote at beginning of word
+                    if (ARGS[i][1] == '$') {
+                        if (ARGS[i][(int) strlen(ARGS[i]) - 1] == ',' || ARGS[i][(int) strlen(ARGS[i]) - 1] == '.' ||
+                            ARGS[i][(int) strlen(ARGS[i]) - 1] == '!' || ARGS[i][(int) strlen(ARGS[i]) - 1] == '?') {
+                            if (strcasecmp(get_value_after_dollar(&ARGS[i][1], (int) strlen(ARGS[i]) - 2), "") != 0) {
+                                printf("%s%c ", get_value_after_dollar(&ARGS[i][1], (int) strlen(ARGS[i]) - 2),
+                                       ARGS[i][(int) strlen(ARGS[i]) - 1]);
+                            } else {
+                                printf("%s ", ARGS[i]);
+                            }
+                        } else {
+                            if (strcasecmp(get_value_after_dollar(&ARGS[i][1], (int) strlen(ARGS[i]) - 1), "") != 0) {
+                                printf("%s ", get_value_after_dollar(&ARGS[i][1], (int) strlen(ARGS[i]) - 1));
+                            } else {
+                                printf("%s ", ARGS[i]);
+                            }
+                        }
+                    } else {
+                        printf("%s ", ARGS[i]);
+                    }
+                } else if (ARGS[i][(int) strlen(ARGS[i]) - 1] == '"') { //quote at end of word
+                    if (ARGS[i][0] == '$') {
+                        if (ARGS[i][(int) strlen(ARGS[i]) - 2] == ',' || ARGS[i][(int) strlen(ARGS[i]) - 2] == '.' ||
+                            ARGS[i][(int) strlen(ARGS[i]) - 2] == '!' || ARGS[i][(int) strlen(ARGS[i]) - 2] == '?') {
+                            char temp_arg[MAX_LENGTH] = {0};
+                            strncpy(temp_arg, ARGS[i], strlen(ARGS[i]) - 2);
+                            if (strcasecmp(get_value_after_dollar(temp_arg, (int) strlen(ARGS[i]) - 2), "") != 0) {
+                                printf("%s%c ", get_value_after_dollar(temp_arg, (int) strlen(ARGS[i]) - 2),
+                                       ARGS[i][(int) strlen(ARGS[i]) - 2]);
+                            } else {
+                                printf("%s ", ARGS[i]);
+                            }
+                        } else {
+                            char temp_arg[MAX_LENGTH] = {0};
+                            strncpy(temp_arg, ARGS[i], strlen(ARGS[i]) - 1);
+                            if (strcasecmp(get_value_after_dollar(temp_arg, (int) strlen(ARGS[i]) - 1), "") != 0) {
+                                printf("%s ", get_value_after_dollar(temp_arg, (int) strlen(ARGS[i]) - 1));
+                            } else {
+                                printf("%s ", ARGS[i]);
+                            }
+                        }
                     } else {
                         printf("%s ", ARGS[i]);
                     }
                 } else {
-                    printf("%s ", ARGS[i]);
-                }
-            } else if (ARGS[i][(int) strlen(ARGS[i]) - 1] == '"') {
-                if (ARGS[i][0] == '$') {
-                    char temp_arg[MAX_LENGTH] = {0};
-                    strncpy(temp_arg, ARGS[i], strlen(ARGS[i]) - 1);
-                    if (strcasecmp(get_value_after_dollar(temp_arg, (int) strlen(ARGS[i]) - 1), "") != 0) {
-                        printf("%s ", get_value_after_dollar(temp_arg, (int) strlen(ARGS[i]) - 1));
+                    if (ARGS[i][0] == '$') {
+                        if (ARGS[i][(int) strlen(ARGS[i]) - 1] == ',' || ARGS[i][(int) strlen(ARGS[i]) - 1] == '.' ||
+                            ARGS[i][(int) strlen(ARGS[i]) - 1] == '!' || ARGS[i][(int) strlen(ARGS[i]) - 1] == '?') {
+                            if (strcasecmp(get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i]) - 1), "") != 0) {
+                                printf("%s%c ", get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i]) - 1),
+                                       ARGS[i][(int) strlen(ARGS[i]) - 1]);
+                            } else {
+                                printf("%s ", ARGS[i]);
+                            }
+                        } else {
+                            if (strcasecmp(get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])), "") != 0) {
+                                printf("%s ", get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])));
+                            } else {
+                                printf("%s ", ARGS[i]);
+                            }
+                        }
                     } else {
                         printf("%s ", ARGS[i]);
                     }
-                } else {
-                    printf("%s ", ARGS[i]);
-                }
-            } else {
-                if (ARGS[i][0] == '$') {
-                    if (strcasecmp(get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])), "") != 0) {
-                        printf("%s ", get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])));
-                    } else {
-                        printf("%s ", ARGS[i]);
-                    }
-                } else {
-                    printf("%s ", ARGS[i]);
                 }
             }
         }
@@ -546,12 +582,11 @@ void print_command() {
     } else {
         for (int i = 1; i < INPUT_ARGS_COUNT; i++) {
             if (print_literal == 0) {
-                //checking for special case
-                if (ARGS[i][0] == '"' && ARGS[i][strlen(ARGS[i]) - 1] == '"' && strlen(ARGS[i]) > 1) {
+                if (ARGS[i][0] == '"' && ARGS[i][strlen(ARGS[i]) - 1] == '"' &&
+                    strlen(ARGS[i]) > 1) { //checking for special case
                     printf("%.*s ", (int) (strlen(ARGS[i]) - 2), &ARGS[i][1]);
                 } else {
-                    //assuming first quote is the beginning of a string
-                    if (ARGS[i][0] == '"') {
+                    if (ARGS[i][0] == '"') { //assuming first quote is the beginning of a string
                         if (strlen(ARGS[i]) > 1) {
                             printf("%s ", ARGS[i] + 1);
                             print_literal = 1;
@@ -560,10 +595,22 @@ void print_command() {
                         }
                     } else {
                         if (ARGS[i][0] == '$') {
-                            if (strcasecmp(get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])), "") != 0) {
-                                printf("%s ", get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])));
+                            if (ARGS[i][(int) strlen(ARGS[i]) - 1] == ',' ||
+                                ARGS[i][(int) strlen(ARGS[i]) - 1] == '.' ||
+                                ARGS[i][(int) strlen(ARGS[i]) - 1] == '!' ||
+                                ARGS[i][(int) strlen(ARGS[i]) - 1] == '?') {
+                                if (strcasecmp(get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i]) - 1), "") != 0) {
+                                    printf("%s%c ", get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i]) - 1),
+                                           ARGS[i][(int) strlen(ARGS[i]) - 1]);
+                                } else {
+                                    printf("%s ", ARGS[i]);
+                                }
                             } else {
-                                printf("%s ", ARGS[i]);
+                                if (strcasecmp(get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])), "") != 0) {
+                                    printf("%s ", get_value_after_dollar(ARGS[i], (int) strlen(ARGS[i])));
+                                } else {
+                                    printf("%s ", ARGS[i]);
+                                }
                             }
                         } else {
                             printf("%s ", ARGS[i]);
@@ -607,21 +654,24 @@ void change_directory(char path[]) {
             }
         }
     } else {
-        if (strcmp(CWD, HOME) != 0) {
-            for (int i = (int) strlen(CWD) - 1; i >= 0; i--) {
-                if (CWD[i] == '/') {
-                    last_slash_pos = i;
-                    break;
-                }
+        for (int i = (int) strlen(CWD) - 1; i >= 0; i--) {
+            if (CWD[i] == '/') {
+                last_slash_pos = i;
+                break;
             }
+        }
 
-            for (int i = last_slash_pos; i < (int) strlen(CWD); i++) {
-                CWD[i] = '\0';
-            }
+        for (int i = last_slash_pos; i < (int) strlen(CWD); i++) {
+            CWD[i] = '\0';
+        }
 
-            if (chdir(CWD) != 0) {
-                perror("Cannot change directory");
-                strncpy(CWD, cwd_before_change, strlen(cwd_before_change));
+        if (chdir(CWD) != 0) {
+            perror("Cannot change directory");
+            strncpy(CWD, cwd_before_change, strlen(cwd_before_change));
+        } else {
+            clear_string(CWD, MAX_LENGTH);
+            if (getcwd(CWD, sizeof(CWD)) == NULL) {
+                perror("Cannot set current working directory");
             }
         }
     }
