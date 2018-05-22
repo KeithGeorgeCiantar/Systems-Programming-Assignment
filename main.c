@@ -8,8 +8,7 @@
 #include <sys/types.h>
 #include "linenoise.h"
 
-#define MAX_LENGTH 300
-#define EDITABLE_SHELL_VARS 7
+#define MAX_LENGTH 512
 #define NUM_INTERNAL_COMMANDS 5
 
 #define clear_terminal() printf("\033[H\033[J")
@@ -23,8 +22,6 @@ char HOME[MAX_LENGTH] = {0};
 char SHELL[MAX_LENGTH] = {0};
 char TERMINAL[MAX_LENGTH] = {0};
 int EXTICODE = 0;
-
-char SHELL_VAR_NAMES[EDITABLE_SHELL_VARS][MAX_LENGTH];
 
 char USER_VAR_NAMES[MAX_LENGTH][MAX_LENGTH];
 char USER_VAR_VALUES[MAX_LENGTH][MAX_LENGTH];
@@ -133,22 +130,17 @@ void eggsh_init() {
         strncpy(PATH, temp_path, strlen(temp_path));
     }
 
-
-    //fill up the array with all the standard shell variables to be able to check later on
-    strncpy(SHELL_VAR_NAMES[0], "PATH", strlen("PATH"));
-    strncpy(SHELL_VAR_NAMES[1], "PROMPT", strlen("PROMPT"));
-    strncpy(SHELL_VAR_NAMES[2], "CWD", strlen("CWD"));
-    strncpy(SHELL_VAR_NAMES[3], "USER", strlen("USER"));
-    strncpy(SHELL_VAR_NAMES[4], "HOME", strlen("HOME"));
-    strncpy(SHELL_VAR_NAMES[5], "SHELL", strlen("SHELL"));
-    strncpy(SHELL_VAR_NAMES[6], "TERMINAL", strlen("TERMINAL"));
-
     //fill up the array with all the internal commands to check later on
+    //this array is used to allow for more commands in the future
     strncpy(INTERNAL_COMMANDS[0], "exit", strlen("exit"));
     strncpy(INTERNAL_COMMANDS[1], "print", strlen("print"));
     strncpy(INTERNAL_COMMANDS[2], "chdir", strlen("chdir"));
     strncpy(INTERNAL_COMMANDS[3], "all", strlen("all"));
     strncpy(INTERNAL_COMMANDS[4], "source", strlen("source"));
+
+    for (int i = 0; i < MAX_LENGTH; i++) {
+        clear_string(ARGS[i], MAX_LENGTH);
+    }
 }
 
 //print header and welcome message
@@ -208,6 +200,10 @@ void get_and_process_input() {
 
         clear_string(input, input_length);
         linenoiseFree(input);
+
+        for (int i = 0; i < MAX_LENGTH; i++) {
+            clear_string(ARGS[i], MAX_LENGTH);
+        }
     }
 }
 
@@ -226,6 +222,9 @@ int check_for_char_in_string(const char input[], int input_length, char check_ch
     return char_position;
 }
 
+
+//checks whether a user created variable is valid
+//returns 0 if invalid and 1 if valid
 int check_var_name_validity(const char input[], int input_length) {
     int valid = 1;
 
@@ -245,21 +244,6 @@ int check_var_name_validity(const char input[], int input_length) {
     }
 
     return valid;
-}
-
-//check the editable shell variables to see if a variable exists
-//if the variable exists return the position of that variable, else return -1
-int check_shell_variable_names(const char var_name[]) {
-    int var_position = -1;
-
-    for (int i = 0; i < EDITABLE_SHELL_VARS; i++) {
-        if (strcasecmp(var_name, SHELL_VAR_NAMES[i]) == 0) {
-            var_position = i;
-            break;
-        }
-    }
-
-    return var_position;
 }
 
 //check the array of user added variables to see if a variable exists
@@ -307,53 +291,50 @@ void set_variable(const char input[], int input_length, int equals_position) {
     }
 
     //checking whether a variable already exists as a shell variable
-    int var_position = check_shell_variable_names(temp_var_name);
-
-    if (var_position != -1) { //if the variable already exists as a shell variable, update the the value
-        if (strcmp(SHELL_VAR_NAMES[var_position], "PATH") == 0) {
-            if (setenv("PATH", temp_var_value, 1) != 0) {
-                perror("Cannot set variable PATH");
-            } else {
-                clear_string(PATH, (int) strlen(PATH));
-                strncpy(PATH, temp_var_value, strlen(temp_var_value));
-            }
-        } else if (strcmp(SHELL_VAR_NAMES[var_position], "PROMPT") == 0) {
-            clear_string(PROMPT, (int) strlen(PROMPT));
-            strncpy(PROMPT, temp_var_value, strlen(temp_var_value));
-        } else if (strcmp(SHELL_VAR_NAMES[var_position], "CWD") == 0) {
-            if (chdir(temp_var_value) != 0) {
-                perror("Cannot change directory");
-            } else {
-                clear_string(CWD, (int) strlen(CWD));
-                strncpy(CWD, temp_var_value, strlen(temp_var_value));
-            }
-        } else if (strcmp(SHELL_VAR_NAMES[var_position], "USER") == 0) {
-            if (setenv("USER", temp_var_value, 1) != 0) {
-                perror("Cannot set variable USER");
-            } else {
-                clear_string(USER, (int) strlen(USER));
-                strncpy(USER, temp_var_value, strlen(temp_var_value));
-            }
-        } else if (strcmp(SHELL_VAR_NAMES[var_position], "HOME") == 0) {
-            if (setenv("HOME", temp_var_value, 1) != 0) {
-                perror("Cannot set variable HOME");
-            } else {
-                clear_string(HOME, (int) strlen(USER));
-                strncpy(HOME, temp_var_value, strlen(temp_var_value));
-            }
-        } else if (strcmp(SHELL_VAR_NAMES[var_position], "SHELL") == 0) {
-            if (setenv("SHELL", temp_var_value, 1) != 0) {
-                perror("Cannot set variable SHELL");
-            } else {
-                clear_string(SHELL, (int) strlen(USER));
-                strncpy(SHELL, temp_var_value, strlen(temp_var_value));
-            }
-        } else if (strcmp(SHELL_VAR_NAMES[var_position], "TERMINAL") == 0) {
-            clear_string(TERMINAL, (int) strlen(TERMINAL));
-            strncpy(TERMINAL, temp_var_value, strlen(temp_var_value));
+    //if the variable already exists as a shell variable, update the the value
+    if (strcmp(temp_var_name, "PATH") == 0) {
+        if (setenv("PATH", temp_var_value, 1) != 0) {
+            perror("Cannot set variable PATH");
+        } else {
+            clear_string(PATH, (int) strlen(PATH));
+            strncpy(PATH, temp_var_value, strlen(temp_var_value));
         }
+    } else if (strcmp(temp_var_name, "PROMPT") == 0) {
+        clear_string(PROMPT, (int) strlen(PROMPT));
+        strncpy(PROMPT, temp_var_value, strlen(temp_var_value));
+    } else if (strcmp(temp_var_name, "CWD") == 0) {
+        if (chdir(temp_var_value) != 0) {
+            perror("Cannot change directory");
+        } else {
+            clear_string(CWD, (int) strlen(CWD));
+            strncpy(CWD, temp_var_value, strlen(temp_var_value));
+        }
+    } else if (strcmp(temp_var_name, "USER") == 0) {
+        if (setenv("USER", temp_var_value, 1) != 0) {
+            perror("Cannot set variable USER");
+        } else {
+            clear_string(USER, (int) strlen(USER));
+            strncpy(USER, temp_var_value, strlen(temp_var_value));
+        }
+    } else if (strcmp(temp_var_name, "HOME") == 0) {
+        if (setenv("HOME", temp_var_value, 1) != 0) {
+            perror("Cannot set variable HOME");
+        } else {
+            clear_string(HOME, (int) strlen(HOME));
+            strncpy(HOME, temp_var_value, strlen(temp_var_value));
+        }
+    } else if (strcmp(temp_var_name, "SHELL") == 0) {
+        if (setenv("SHELL", temp_var_value, 1) != 0) {
+            perror("Cannot set variable SHELL");
+        } else {
+            clear_string(SHELL, (int) strlen(SHELL));
+            strncpy(SHELL, temp_var_value, strlen(temp_var_value));
+        }
+    } else if (strcmp(temp_var_name, "TERMINAL") == 0) {
+        clear_string(TERMINAL, (int) strlen(TERMINAL));
+        strncpy(TERMINAL, temp_var_value, strlen(temp_var_value));
     } else {
-        var_position = check_user_variable_names(temp_var_name);
+        int var_position = check_user_variable_names(temp_var_name);
 
         if (var_position != -1) { //if the variable already exists as a user added variable, update the the value
             clear_string(USER_VAR_VALUES[var_position], MAX_LENGTH);
@@ -373,29 +354,20 @@ void set_variable(const char input[], int input_length, int equals_position) {
 char *get_variable_value(const char var_name[]) {
     int var_position = -1;
 
-    for (int i = 0; i < EDITABLE_SHELL_VARS; i++) {
-        if (strcmp(SHELL_VAR_NAMES[i], var_name) == 0) {
-            var_position = i;
-            break;
-        }
-    }
-
-    if (var_position != -1) {
-        if (strcmp(SHELL_VAR_NAMES[var_position], "PATH") == 0) {
-            return PATH;
-        } else if (strcmp(SHELL_VAR_NAMES[var_position], "PROMPT") == 0) {
-            return PROMPT;
-        } else if (strcmp(SHELL_VAR_NAMES[var_position], "CWD") == 0) {
-            return CWD;
-        } else if (strcmp(SHELL_VAR_NAMES[var_position], "USER") == 0) {
-            return USER;
-        } else if (strcmp(SHELL_VAR_NAMES[var_position], "HOME") == 0) {
-            return HOME;
-        } else if (strcmp(SHELL_VAR_NAMES[var_position], "SHELL") == 0) {
-            return SHELL;
-        } else if (strcmp(SHELL_VAR_NAMES[var_position], "TERMINAL") == 0) {
-            return TERMINAL;
-        }
+    if (strcmp(var_name, "PATH") == 0) {
+        return PATH;
+    } else if (strcmp(var_name, "PROMPT") == 0) {
+        return PROMPT;
+    } else if (strcmp(var_name, "CWD") == 0) {
+        return CWD;
+    } else if (strcmp(var_name, "USER") == 0) {
+        return USER;
+    } else if (strcmp(var_name, "HOME") == 0) {
+        return HOME;
+    } else if (strcmp(var_name, "SHELL") == 0) {
+        return SHELL;
+    } else if (strcmp(var_name, "TERMINAL") == 0) {
+        return TERMINAL;
     } else {
         for (int i = 0; i < VAR_COUNT; i++) {
             if (strcmp(USER_VAR_NAMES[i], var_name) == 0) {
