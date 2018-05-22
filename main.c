@@ -28,7 +28,7 @@ char USER_VAR_VALUES[MAX_LENGTH][MAX_LENGTH];
 
 char INTERNAL_COMMANDS[NUM_INTERNAL_COMMANDS][MAX_LENGTH];
 
-char ARGS[MAX_LENGTH][MAX_LENGTH];
+char *ARGS[MAX_LENGTH];
 
 int INPUT_ARGS_COUNT = 0;
 int VAR_COUNT = 0;
@@ -44,8 +44,6 @@ void get_and_process_input();
 int check_for_char_in_string(const char input[], int input_length, char check_char);
 
 int check_var_name_validity(const char input[], int input_length);
-
-int check_shell_variable_names(const char var_name[]);
 
 int check_user_variable_names(const char var_name[]);
 
@@ -139,7 +137,7 @@ void eggsh_init() {
     strncpy(INTERNAL_COMMANDS[4], "source", strlen("source"));
 
     for (int i = 0; i < MAX_LENGTH; i++) {
-        clear_string(ARGS[i], MAX_LENGTH);
+        ARGS[i] = NULL;
     }
 }
 
@@ -187,6 +185,12 @@ void get_and_process_input() {
         } else { //if the input is not var=value, tokenize it
 
             INPUT_ARGS_COUNT = tokenize_input(input);
+            printf("%d\n", INPUT_ARGS_COUNT);
+
+
+            for (int i = 0; i < INPUT_ARGS_COUNT; i++) {
+                printf("%d %s\n", i, ARGS[i]);
+            }
 
             //check for internal commands
             int command_position = check_internal_command(ARGS[0]);
@@ -201,8 +205,8 @@ void get_and_process_input() {
         clear_string(input, input_length);
         linenoiseFree(input);
 
-        for (int i = 0; i < MAX_LENGTH; i++) {
-            clear_string(ARGS[i], MAX_LENGTH);
+        for (int i = 0; i < INPUT_ARGS_COUNT; i++) {
+            clear_string(ARGS[i], (int) strlen(ARGS[i]));
         }
     }
 }
@@ -433,14 +437,10 @@ int tokenize_input(char input[]) {
     char *token;
     int token_index = 0;
 
-    for (int i = 0; i < MAX_LENGTH; i++) {
-        clear_string(ARGS[i], MAX_LENGTH);
-    }
-
     token = strtok(input, " ");
 
     while (token != NULL && token_index < MAX_LENGTH) {
-        strncpy(ARGS[token_index], token, strlen(token));
+        ARGS[token_index] = token;
         token_index++;
         token = strtok(NULL, " ");
     }
