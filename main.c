@@ -6,6 +6,7 @@
 #include <string.h>
 #include <pwd.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include "linenoise.h"
 
 #define MAX_LENGTH 512
@@ -68,6 +69,8 @@ int execute_internal_command(const char command[]);
 void print_command();
 
 void change_directory(char path[]);
+
+void execute_external_command(const char command[]);
 
 int main(int argc, char **argv, char **env) {
 
@@ -185,12 +188,6 @@ void get_and_process_input() {
         } else { //if the input is not var=value, tokenize it
 
             INPUT_ARGS_COUNT = tokenize_input(input);
-            printf("%d\n", INPUT_ARGS_COUNT);
-
-
-            for (int i = 0; i < INPUT_ARGS_COUNT; i++) {
-                printf("%d %s\n", i, ARGS[i]);
-            }
 
             //check for internal commands
             int command_position = check_internal_command(ARGS[0]);
@@ -199,6 +196,8 @@ void get_and_process_input() {
                 if (execute_internal_command(ARGS[0]) == 1) {
                     break;
                 }
+            } else {
+                execute_external_command(ARGS[0]);
             }
         }
 
@@ -207,6 +206,10 @@ void get_and_process_input() {
 
         for (int i = 0; i < INPUT_ARGS_COUNT; i++) {
             clear_string(ARGS[i], (int) strlen(ARGS[i]));
+        }
+
+        for (int i = 0; i < MAX_LENGTH; i++) {
+            ARGS[i] = NULL;
         }
     }
 }
@@ -675,4 +678,20 @@ void change_directory(char path[]) {
             }
         }
     }
+}
+
+void execute_external_command(const char command[]) {
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        perror("Unable to fork");
+        exit(EXIT_FAILURE);
+    } else if (pid == 0) {
+        if (execvp(command, ARGS)) {
+            perror("Exec failed");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    wait(NULL);
 }
