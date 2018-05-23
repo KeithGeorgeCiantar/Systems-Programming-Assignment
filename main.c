@@ -34,6 +34,8 @@ char *ARGS[MAX_LENGTH];
 int INPUT_ARGS_COUNT = 0;
 int VAR_COUNT = 0;
 
+int SOURCE_DEPTH = 0;
+
 void eggsh_init();
 
 void welcome_message();
@@ -42,7 +44,7 @@ void print_header();
 
 void get_input_from_terminal();
 
-void get_input_from_file();
+void get_input_from_file(const char filename[]);
 
 int check_for_char_in_string(const char input[], int input_length, char check_char);
 
@@ -189,7 +191,7 @@ void get_input_from_terminal() {
 
         if (equals_position != -1 && equals_position != 0) {
             set_variable(input, input_length, equals_position);
-        } else { //if the input is not var=value, tokenize it
+        } else if (strcasecmp(input, "") != 0) { //if the input is not var=value, tokenize it
 
             INPUT_ARGS_COUNT = tokenize_input(input);
 
@@ -203,33 +205,40 @@ void get_input_from_terminal() {
             } else {
                 execute_external_command(ARGS[0]);
             }
+
+            clear_and_null_args();
         }
 
         clear_string(input, input_length);
         linenoiseFree(input);
-
-        clear_and_null_args();
     }
 }
 
 //this will be used when source is called
-void get_input_from_file() {
+void get_input_from_file(const char filename[]) {
     FILE *openFile;
     int line_length = 0;
     char line[MAX_LENGTH];
 
-    if ((openFile = fopen(ARGS[1], "r")) == NULL) {
+    if ((openFile = fopen(filename, "r")) == NULL) {
         perror("Cannot open file");
     } else {
-        while (fgets(line, sizeof(line), openFile)) {
+        clear_and_null_args();
+        SOURCE_DEPTH++;
+        while (fgets(line, sizeof(line), openFile) != NULL) {
             line_length = (int) strlen(line);
+
+            //remove \n from the end of the line
+            line[line_length - 1] = '\0';
+
+            printf("%d\n", SOURCE_DEPTH);
 
             //checking for var=value
             int equals_position = check_for_char_in_string(line, line_length, '=');
 
             if (equals_position != -1 && equals_position != 0) {
                 set_variable(line, line_length, equals_position);
-            } else { //if the input is not var=value, tokenize it
+            } else if (strcasecmp(line, "") != 0) { //if the input is not var=value, tokenize it
 
                 INPUT_ARGS_COUNT = tokenize_input(line);
 
@@ -243,11 +252,17 @@ void get_input_from_file() {
                 } else {
                     execute_external_command(ARGS[0]);
                 }
+
+                //this is to check for when a source is run from a source
+                if (SOURCE_DEPTH == 2) {
+                    clear_and_null_args();
+                }
             }
 
             clear_string(line, line_length);
-            clear_and_null_args();
         }
+        SOURCE_DEPTH--;
+        fclose(openFile);
     }
 }
 
@@ -323,8 +338,6 @@ void set_variable(const char input[], int input_length, int equals_position) {
     strncpy(temp_var_value, &input[equals_position + 1], (size_t) (input_length - (equals_position + 1)));
 
     int dollar_position = check_for_char_in_string(input, input_length, '$');
-
-    printf("%d, %d\n", dollar_position, equals_position);
 
     if (dollar_position == (equals_position + 1)) {
         char var_with_dollar[MAX_LENGTH] = {0};
@@ -475,7 +488,6 @@ void print_user_variables() {
 }
 
 //get the input from the terminal and fill the global ARGS array
-//return the amount if input arguments
 int tokenize_input(char input[]) {
     char *token;
     int token_index = 0;
@@ -493,12 +505,14 @@ int tokenize_input(char input[]) {
 
 //clear all the input arguments and set the pointers to NULL
 void clear_and_null_args() {
-    for (int i = 0; i < INPUT_ARGS_COUNT; i++) {
-        clear_string(ARGS[i], (int) strlen(ARGS[i]));
-    }
+    if (INPUT_ARGS_COUNT > 0) {
+        for (int i = 0; i < INPUT_ARGS_COUNT; i++) {
+            clear_string(ARGS[i], (int) strlen(ARGS[i]));
+        }
 
-    for (int i = 0; i < MAX_LENGTH; i++) {
-        ARGS[i] = NULL;
+        for (int i = 0; i < MAX_LENGTH; i++) {
+            ARGS[i] = NULL;
+        }
     }
 }
 
@@ -530,7 +544,7 @@ int execute_internal_command(const char command[]) {
         print_standard_variables();
         print_user_variables();
     } else if (strcasecmp(command, "source") == 0) {
-        get_input_from_file();
+        get_input_from_file(ARGS[1]);
     }
 
     return exit;
