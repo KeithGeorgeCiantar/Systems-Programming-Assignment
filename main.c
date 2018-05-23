@@ -40,7 +40,9 @@ void welcome_message();
 
 void print_header();
 
-void get_and_process_input();
+void get_input_from_terminal();
+
+void get_input_from_file();
 
 int check_for_char_in_string(const char input[], int input_length, char check_char);
 
@@ -61,6 +63,8 @@ void print_standard_variables();
 void print_user_variables();
 
 int tokenize_input(char input[]);
+
+void clear_and_null_args();
 
 int check_internal_command(const char input[]);
 
@@ -84,7 +88,7 @@ int main(int argc, char **argv, char **env) {
 
     welcome_message();
 
-    get_and_process_input();
+    get_input_from_terminal();
 
     return 0;
 }
@@ -168,7 +172,7 @@ void print_header() {
 }
 
 //indefinitely read from the input until 'exit' is entered
-void get_and_process_input() {
+void get_input_from_terminal() {
     char *input = "";
     int input_length = 0;
 
@@ -204,12 +208,45 @@ void get_and_process_input() {
         clear_string(input, input_length);
         linenoiseFree(input);
 
-        for (int i = 0; i < INPUT_ARGS_COUNT; i++) {
-            clear_string(ARGS[i], (int) strlen(ARGS[i]));
-        }
+        clear_and_null_args();
+    }
+}
 
-        for (int i = 0; i < MAX_LENGTH; i++) {
-            ARGS[i] = NULL;
+//this will be used when source is called
+void get_input_from_file() {
+    FILE *openFile;
+    int line_length = 0;
+    char line[MAX_LENGTH];
+
+    if ((openFile = fopen(ARGS[1], "r")) == NULL) {
+        perror("Cannot open file");
+    } else {
+        while (fgets(line, sizeof(line), openFile)) {
+            line_length = (int) strlen(line);
+
+            //checking for var=value
+            int equals_position = check_for_char_in_string(line, line_length, '=');
+
+            if (equals_position != -1 && equals_position != 0) {
+                set_variable(line, line_length, equals_position);
+            } else { //if the input is not var=value, tokenize it
+
+                INPUT_ARGS_COUNT = tokenize_input(line);
+
+                //check for internal commands
+                int command_position = check_internal_command(ARGS[0]);
+
+                if (command_position != -1) {
+                    if (execute_internal_command(ARGS[0]) == 1) {
+                        break;
+                    }
+                } else {
+                    execute_external_command(ARGS[0]);
+                }
+            }
+
+            clear_string(line, line_length);
+            clear_and_null_args();
         }
     }
 }
@@ -228,7 +265,6 @@ int check_for_char_in_string(const char input[], int input_length, char check_ch
 
     return char_position;
 }
-
 
 //checks whether a user created variable is valid
 //returns 0 if invalid and 1 if valid
@@ -438,6 +474,8 @@ void print_user_variables() {
     }
 }
 
+//get the input from the terminal and fill the global ARGS array
+//return the amount if input arguments
 int tokenize_input(char input[]) {
     char *token;
     int token_index = 0;
@@ -451,6 +489,17 @@ int tokenize_input(char input[]) {
     }
 
     return token_index;
+}
+
+//clear all the input arguments and set the pointers to NULL
+void clear_and_null_args() {
+    for (int i = 0; i < INPUT_ARGS_COUNT; i++) {
+        clear_string(ARGS[i], (int) strlen(ARGS[i]));
+    }
+
+    for (int i = 0; i < MAX_LENGTH; i++) {
+        ARGS[i] = NULL;
+    }
 }
 
 //check whether the first argument in the input is an internal command
@@ -481,7 +530,7 @@ int execute_internal_command(const char command[]) {
         print_standard_variables();
         print_user_variables();
     } else if (strcasecmp(command, "source") == 0) {
-
+        get_input_from_file();
     }
 
     return exit;
@@ -640,7 +689,7 @@ void print_command() {
     }
 }
 
-
+//function which checks the CWD and the given path and changes it if it is valid
 void change_directory(char path[]) {
     int last_slash_pos = 0;
     char cwd_before_change[MAX_LENGTH];
@@ -680,6 +729,7 @@ void change_directory(char path[]) {
     }
 }
 
+//simple fork-plus-exec function to execute external commands
 void execute_external_command(const char command[]) {
     pid_t pid = fork();
 
