@@ -1,12 +1,14 @@
 #include <stdio.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/ioctl.h>
 #include <string.h>
 #include <pwd.h>
+#include <limits.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include "linenoise.h"
 
 #define MAX_LENGTH 512
@@ -70,13 +72,13 @@ void clear_and_null_args();
 
 int check_internal_command(const char input[]);
 
-int execute_internal_command(const char command[]);
+int execute_internal_command(const char command[], int redirect);
 
 void print_command();
 
 void change_directory(char path[]);
 
-void execute_external_command(const char command[]);
+void execute_external_command(const char command[], int redirect);
 
 int main(int argc, char **argv, char **env) {
 
@@ -192,18 +194,27 @@ void get_input_from_terminal() {
         if (equals_position != -1 && equals_position != 0) {
             set_variable(input, input_length, equals_position);
         } else if (strcasecmp(input, "") != 0) { //if the input is not var=value, tokenize it
-
             INPUT_ARGS_COUNT = tokenize_input(input);
+
+            int redirect_type = 0;
+
+            if (INPUT_ARGS_COUNT > 2) {
+                if (strcmp(ARGS[INPUT_ARGS_COUNT - 2], ">") == 0) {
+                    redirect_type = 1;
+                } else if (strcmp(ARGS[INPUT_ARGS_COUNT - 2], ">>") == 0) {
+                    redirect_type = 2;
+                }
+            }
 
             //check for internal commands
             int command_position = check_internal_command(ARGS[0]);
 
             if (command_position != -1) {
-                if (execute_internal_command(ARGS[0]) == 1) {
+                if (execute_internal_command(ARGS[0], redirect_type) == 1) {
                     break;
                 }
             } else {
-                execute_external_command(ARGS[0]);
+                execute_external_command(ARGS[0], redirect_type);
             }
 
             clear_and_null_args();
@@ -231,8 +242,6 @@ void get_input_from_file(const char filename[]) {
             //remove \n from the end of the line
             line[line_length - 1] = '\0';
 
-            printf("%d\n", SOURCE_DEPTH);
-
             //checking for var=value
             int equals_position = check_for_char_in_string(line, line_length, '=');
 
@@ -242,15 +251,25 @@ void get_input_from_file(const char filename[]) {
 
                 INPUT_ARGS_COUNT = tokenize_input(line);
 
+                int redirect_type = 0;
+
+                if (INPUT_ARGS_COUNT > 2) {
+                    if (strcmp(ARGS[INPUT_ARGS_COUNT - 2], ">") == 0) {
+                        redirect_type = 1;
+                    } else if (strcmp(ARGS[INPUT_ARGS_COUNT - 2], ">>") == 0) {
+                        redirect_type = 2;
+                    }
+                }
+
                 //check for internal commands
                 int command_position = check_internal_command(ARGS[0]);
 
                 if (command_position != -1) {
-                    if (execute_internal_command(ARGS[0]) == 1) {
+                    if (execute_internal_command(ARGS[0], redirect_type) == 1) {
                         break;
                     }
                 } else {
-                    execute_external_command(ARGS[0]);
+                    execute_external_command(ARGS[0], redirect_type);
                 }
 
                 //this is to check for when a source is run from a source
@@ -464,13 +483,6 @@ void clear_string(char input[], int input_length) {
 
 //print all the standard variables
 void print_standard_variables() {
-    //PATH
-    //PROMPT
-    //CWD
-    //USER
-    //HOME
-    //SHELL
-    //TERMINAL
     printf("PATH=%s\n", PATH);
     printf("PROMPT=%s\n", PROMPT);
     printf("CWD=%s\n", CWD);
@@ -482,8 +494,10 @@ void print_standard_variables() {
 
 //print all the user variables
 void print_user_variables() {
-    for (int i = 0; i < VAR_COUNT; i++) {
-        printf("%s=%s \n", USER_VAR_NAMES[i], USER_VAR_VALUES[i]);
+    if (VAR_COUNT != 0) {
+        for (int i = 0; i < VAR_COUNT; i++) {
+            printf("%s=%s \n", USER_VAR_NAMES[i], USER_VAR_VALUES[i]);
+        }
     }
 }
 
@@ -531,23 +545,183 @@ int check_internal_command(const char input[]) {
 }
 
 //execute an internal command depending on the first argument
-int execute_internal_command(const char command[]) {
-    int exit = 0;
+int execute_internal_command(const char command[], int redirect) {
+    int exit_terminal = 0;
 
     if (strcasecmp(command, "exit") == 0) {
-        exit = 1;
+        exit_terminal = 1;
     } else if (strcasecmp(command, "print") == 0) {
-        print_command();
+        if (redirect == 1) {
+            char filename[MAX_LENGTH];
+            strncpy(filename, ARGS[INPUT_ARGS_COUNT - 1], strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+
+            clear_string(ARGS[INPUT_ARGS_COUNT - 1], (int) strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+            clear_string(ARGS[INPUT_ARGS_COUNT - 2], (int) strlen(ARGS[INPUT_ARGS_COUNT - 2]));
+            ARGS[INPUT_ARGS_COUNT - 1] = NULL;
+            ARGS[INPUT_ARGS_COUNT - 2] = NULL;
+
+            INPUT_ARGS_COUNT = INPUT_ARGS_COUNT - 2;
+
+            pid_t pid = fork();
+
+            if (pid < 0) {
+                perror("Unable to fork");
+                exit(EXIT_FAILURE);
+            } else if (pid == 0) {
+                int fd = open(filename, O_RDWR | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
+                if (fd > 0) {
+                    dup2(fd, 1);
+                    print_command();
+                    close(fd);
+                    exit(EXIT_SUCCESS);
+                } else {
+                    perror("Unable to open file");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            wait(NULL);
+        } else if (redirect == 2) {
+            char filename[MAX_LENGTH];
+            strncpy(filename, ARGS[INPUT_ARGS_COUNT - 1], strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+
+            clear_string(ARGS[INPUT_ARGS_COUNT - 1], (int) strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+            clear_string(ARGS[INPUT_ARGS_COUNT - 2], (int) strlen(ARGS[INPUT_ARGS_COUNT - 2]));
+            ARGS[INPUT_ARGS_COUNT - 1] = NULL;
+            ARGS[INPUT_ARGS_COUNT - 2] = NULL;
+
+            INPUT_ARGS_COUNT = INPUT_ARGS_COUNT - 2;
+
+            pid_t pid = fork();
+
+            if (pid < 0) {
+                perror("Unable to fork");
+                exit(EXIT_FAILURE);
+            } else if (pid == 0) {
+                int fd = open(filename, O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IXUSR);
+                if (fd > 0) {
+                    dup2(fd, 1);
+                    print_command();
+                    close(fd);
+                    exit(EXIT_SUCCESS);
+                } else {
+                    perror("Unable to open file");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            wait(NULL);
+        } else {
+            print_command();
+        }
     } else if (strcasecmp(command, "chdir") == 0) {
         change_directory(ARGS[1]);
     } else if (strcasecmp(command, "all") == 0) {
-        print_standard_variables();
-        print_user_variables();
+        if (redirect == 1) {
+            char filename[MAX_LENGTH];
+            strncpy(filename, ARGS[INPUT_ARGS_COUNT - 1], strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+
+            pid_t pid = fork();
+
+            if (pid < 0) {
+                perror("Unable to fork");
+                exit(EXIT_FAILURE);
+            } else if (pid == 0) {
+                int fd = open(filename, O_RDWR | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
+                if (fd > 0) {
+                    dup2(fd, 1);
+                    print_standard_variables();
+                    print_user_variables();
+                    close(fd);
+                    exit(EXIT_SUCCESS);
+                } else {
+                    perror("Unable to open file");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            wait(NULL);
+        } else if (redirect == 2) {
+            char filename[MAX_LENGTH];
+            strncpy(filename, ARGS[INPUT_ARGS_COUNT - 1], strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+
+            pid_t pid = fork();
+
+            if (pid < 0) {
+                perror("Unable to fork");
+                exit(EXIT_FAILURE);
+            } else if (pid == 0) {
+                int fd = open(filename, O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IXUSR);
+                if (fd > 0) {
+                    dup2(fd, 1);
+                    print_standard_variables();
+                    print_user_variables();
+                    close(fd);
+                    exit(EXIT_SUCCESS);
+                } else {
+                    perror("Unable to open file");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            wait(NULL);
+        } else {
+            print_standard_variables();
+            print_user_variables();
+        }
     } else if (strcasecmp(command, "source") == 0) {
-        get_input_from_file(ARGS[1]);
+        if (redirect == 1) {
+            char filename[MAX_LENGTH];
+            strncpy(filename, ARGS[INPUT_ARGS_COUNT - 1], strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+
+            pid_t pid = fork();
+
+            if (pid < 0) {
+                perror("Unable to fork");
+                exit(EXIT_FAILURE);
+            } else if (pid == 0) {
+                int fd = open(filename, O_RDWR | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
+                if (fd > 0) {
+                    dup2(fd, 1);
+                    get_input_from_file(ARGS[1]);
+                    close(fd);
+                    exit(EXIT_SUCCESS);
+                } else {
+                    perror("Unable to open file");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            wait(NULL);
+        } else if (redirect == 2) {
+            char filename[MAX_LENGTH];
+            strncpy(filename, ARGS[INPUT_ARGS_COUNT - 1], strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+
+            pid_t pid = fork();
+
+            if (pid < 0) {
+                perror("Unable to fork");
+                exit(EXIT_FAILURE);
+            } else if (pid == 0) {
+                int fd = open(filename, O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IXUSR);
+                if (fd > 0) {
+                    dup2(fd, 1);
+                    get_input_from_file(ARGS[1]);
+                    close(fd);
+                    exit(EXIT_SUCCESS);
+                } else {
+                    perror("Unable to open file");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            wait(NULL);
+        } else {
+            get_input_from_file(ARGS[1]);
+        }
     }
 
-    return exit;
+    return exit_terminal;
 }
 
 //functions which prints the input, similar to echo
@@ -744,16 +918,67 @@ void change_directory(char path[]) {
 }
 
 //simple fork-plus-exec function to execute external commands
-void execute_external_command(const char command[]) {
+void execute_external_command(const char command[], int redirect) {
     pid_t pid = fork();
 
     if (pid < 0) {
         perror("Unable to fork");
         exit(EXIT_FAILURE);
     } else if (pid == 0) {
-        if (execvp(command, ARGS)) {
-            perror("Exec failed");
-            exit(EXIT_FAILURE);
+        if (redirect == 1) {
+            char filename[MAX_LENGTH];
+            strncpy(filename, ARGS[INPUT_ARGS_COUNT - 1], strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+
+            clear_string(ARGS[INPUT_ARGS_COUNT - 1], (int) strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+            clear_string(ARGS[INPUT_ARGS_COUNT - 2], (int) strlen(ARGS[INPUT_ARGS_COUNT - 2]));
+            ARGS[INPUT_ARGS_COUNT - 1] = NULL;
+            ARGS[INPUT_ARGS_COUNT - 2] = NULL;
+
+            INPUT_ARGS_COUNT = INPUT_ARGS_COUNT - 2;
+
+            int fd = open(filename, O_RDWR | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
+            if (fd > 0) {
+                dup2(fd, 1);
+                if (execvp(command, ARGS)) {
+                    perror("Exec failed");
+                    exit(EXIT_FAILURE);
+                }
+                close(fd);
+                exit(EXIT_SUCCESS);
+            } else {
+                perror("Unable to open file");
+                exit(EXIT_FAILURE);
+            }
+        } else if (redirect == 2) {
+            char filename[MAX_LENGTH];
+            strncpy(filename, ARGS[INPUT_ARGS_COUNT - 1], strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+
+            clear_string(ARGS[INPUT_ARGS_COUNT - 1], (int) strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+            clear_string(ARGS[INPUT_ARGS_COUNT - 2], (int) strlen(ARGS[INPUT_ARGS_COUNT - 2]));
+            ARGS[INPUT_ARGS_COUNT - 1] = NULL;
+            ARGS[INPUT_ARGS_COUNT - 2] = NULL;
+
+            INPUT_ARGS_COUNT = INPUT_ARGS_COUNT - 2;
+
+            int fd = open(filename, O_RDWR | O_APPEND, S_IRUSR | S_IWUSR | S_IXUSR);
+            if (fd > 0) {
+                dup2(fd, 1);
+                if (execvp(command, ARGS)) {
+                    perror("Exec failed");
+                    exit(EXIT_FAILURE);
+                }
+                close(fd);
+                exit(EXIT_SUCCESS);
+            } else {
+                perror("Unable to open file");
+                exit(EXIT_FAILURE);
+            }
+
+        } else {
+            if (execvp(command, ARGS)) {
+                perror("Exec failed");
+                exit(EXIT_FAILURE);
+            }
         }
     }
 
