@@ -203,6 +203,48 @@ void get_input_from_terminal() {
                     redirect_type = 1;
                 } else if (strcmp(ARGS[INPUT_ARGS_COUNT - 2], ">>") == 0) {
                     redirect_type = 2;
+                } else if (strcmp(ARGS[INPUT_ARGS_COUNT - 2], "<") == 0) {
+                    redirect_type = 3;
+                } else if (strcmp(ARGS[INPUT_ARGS_COUNT - 2], "<<<") == 0) {
+                    redirect_type = 4;
+                }
+            }
+
+            char command[10 * MAX_LENGTH] = "";
+
+            if (redirect_type == 3) {
+                char filename[MAX_LENGTH];
+                strncpy(filename, ARGS[INPUT_ARGS_COUNT - 1], strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+
+                FILE *openFile;
+                int file_length = 0;
+                char line[MAX_LENGTH] = "";
+                char file[10 * MAX_LENGTH] = "";
+
+                if ((openFile = fopen(filename, "r")) == NULL) {
+                    perror("Cannot open file");
+                } else {
+                    while (fgets(line, sizeof(line), openFile) != NULL) {
+                        strcat(file, line);
+                        printf("Line: %s\n", line);
+                        clear_string(line, (int) strlen(line));
+                        printf("Empty line: %s\n", line);
+                    }
+
+                    file_length = (int) strlen(file);
+                    if (file[file_length - 1] == '\n') {
+                        file[file_length - 1] = '\0';
+                    }
+
+                    sprintf(command, "%s %s", ARGS[0], file);
+
+                    clear_and_null_args();
+
+                    INPUT_ARGS_COUNT = tokenize_input(command);
+
+                    fclose(openFile);
+
+                    clear_string(file, file_length);
                 }
             }
 
@@ -222,6 +264,8 @@ void get_input_from_terminal() {
 
         clear_string(input, input_length);
         linenoiseFree(input);
+
+
     }
 }
 
@@ -240,7 +284,9 @@ void get_input_from_file(const char filename[]) {
             line_length = (int) strlen(line);
 
             //remove \n from the end of the line
-            line[line_length - 1] = '\0';
+            if (line[line_length - 1] == '\n') {
+                line[line_length - 1] = '\0';
+            }
 
             //checking for var=value
             int equals_position = check_for_char_in_string(line, line_length, '=');
@@ -476,8 +522,10 @@ char *get_value_after_dollar(char input[], int input_length) {
 
 //clear the given string
 void clear_string(char input[], int input_length) {
-    for (int i = 0; i < input_length; i++) {
-        input[i] = 0;
+    if (input_length > 0) {
+        for (int i = 0; i < input_length; i++) {
+            input[i] = '\0';
+        }
     }
 }
 
