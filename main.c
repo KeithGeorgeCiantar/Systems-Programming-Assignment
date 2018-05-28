@@ -24,7 +24,7 @@ char USER[MAX_LENGTH] = {0};
 char HOME[MAX_LENGTH] = {0};
 char SHELL[MAX_LENGTH] = {0};
 char TERMINAL[MAX_LENGTH] = {0};
-int EXTICODE = 0;
+int EXITCODE = 0;
 
 char USER_VAR_NAMES[MAX_LENGTH][MAX_LENGTH];
 char USER_VAR_VALUES[MAX_LENGTH][MAX_LENGTH];
@@ -318,18 +318,84 @@ void get_input_from_file(const char filename[]) {
             if (equals_position != -1 && equals_position != 0) {
                 set_variable(line, line_length, equals_position);
             } else if (strcasecmp(line, "") != 0) { //if the input is not var=value, tokenize it
-
                 INPUT_ARGS_COUNT = tokenize_input(line);
 
                 int redirect_type = 0;
 
-                if (INPUT_ARGS_COUNT > 2) {
+                /*if (INPUT_ARGS_COUNT > 2) {
                     if (strcmp(ARGS[INPUT_ARGS_COUNT - 2], ">") == 0) {
                         redirect_type = 1;
                     } else if (strcmp(ARGS[INPUT_ARGS_COUNT - 2], ">>") == 0) {
                         redirect_type = 2;
+                    } else if (strcmp(ARGS[1], "<") == 0) {
+                        redirect_type = 3;
+                    } else if (strcmp(ARGS[1], "<<<") == 0) {
+                        redirect_type = 4;
                     }
                 }
+
+                char command[10 * MAX_LENGTH] = "";
+
+                if (redirect_type == 3) {
+                    char redirect_filename[MAX_LENGTH] = "";
+                    strncpy(redirect_filename, ARGS[INPUT_ARGS_COUNT - 1], strlen(ARGS[INPUT_ARGS_COUNT - 1]));
+
+                    FILE *redirectFile;
+                    int file_length = 0;
+                    char redirect_line[MAX_LENGTH] = "";
+                    char file[10 * MAX_LENGTH] = "";
+
+                    if ((redirectFile = fopen(redirect_filename, "r")) == NULL) {
+                        perror("Cannot open file");
+                    } else {
+                        while (fgets(redirect_line, sizeof(redirect_line), redirectFile) != NULL) {
+                            strcat(file, redirect_line);
+                            clear_string(redirect_line, (int) strlen(redirect_line));
+                        }
+
+                        file_length = (int) strlen(file);
+                        if (file[file_length - 1] == '\n') {
+                            file[file_length - 1] = '\0';
+                        }
+
+                        sprintf(command, "%s %s", ARGS[0], file);
+
+                        clear_and_null_args();
+
+                        INPUT_ARGS_COUNT = tokenize_input(command);
+
+                        fclose(redirectFile);
+
+                        clear_string(redirect_filename, (int) strlen(redirect_filename));
+                        clear_string(file, file_length);
+                    }
+                } else if (redirect_type == 4) {
+                    if (INPUT_ARGS_COUNT == 3) {
+                        clear_string(ARGS[1], (int) strlen(ARGS[1]));
+                        ARGS[1] = ARGS[2];
+                        ARGS[2] = NULL;
+                        INPUT_ARGS_COUNT--;
+                        strncpy(ARGS[1], &ARGS[1][1], strlen(ARGS[1]));
+                        ARGS[1][(int) strlen(ARGS[1])] = '\0';
+                        ARGS[1][(int) strlen(ARGS[1]) - 1] = '\0';
+                    } else if (INPUT_ARGS_COUNT > 3) {
+                        clear_string(ARGS[1], (int) strlen(ARGS[1]));
+                        for (int i = 1; i < INPUT_ARGS_COUNT - 1; i++) {
+                            ARGS[i] = ARGS[i + 1];
+                        }
+
+                        INPUT_ARGS_COUNT = INPUT_ARGS_COUNT - 1;
+
+                        if (ARGS[1][0] == '\'') {
+                            strncpy(ARGS[1], &ARGS[1][1], strlen(ARGS[1]));
+                            ARGS[1][(int) strlen(ARGS[1])] = '\0';
+                        }
+
+                        if (ARGS[INPUT_ARGS_COUNT - 1][(int) strlen(ARGS[INPUT_ARGS_COUNT - 1]) - 1] == '\'') {
+                            ARGS[INPUT_ARGS_COUNT - 1][(int) strlen(ARGS[INPUT_ARGS_COUNT - 1]) - 1] = '\0';
+                        }
+                    }
+                }*/
 
                 //check for internal commands
                 int command_position = check_internal_command(ARGS[0]);
@@ -346,6 +412,8 @@ void get_input_from_file(const char filename[]) {
                 if (SOURCE_DEPTH == 2) {
                     clear_and_null_args();
                 }
+
+                //clear_string(command, (int) strlen(command));
             }
 
             clear_string(line, line_length);
@@ -562,6 +630,7 @@ void print_standard_variables() {
     printf("HOME=%s\n", HOME);
     printf("SHELL=%s\n", SHELL);
     printf("TERMINAL=%s\n", TERMINAL);
+    printf("EXITCODE=%d\n", EXITCODE);
 }
 
 //print all the user variables
@@ -623,6 +692,11 @@ int execute_internal_command(const char command[], int redirect) {
     if (strcasecmp(command, "exit") == 0) {
         exit_terminal = 1;
     } else if (strcasecmp(command, "print") == 0) {
+        if (INPUT_ARGS_COUNT == 1) {
+            printf("Invalid input!");
+            return 0;
+        }
+
         if (redirect == 1) {
             char filename[MAX_LENGTH];
             strncpy(filename, ARGS[INPUT_ARGS_COUNT - 1], strlen(ARGS[INPUT_ARGS_COUNT - 1]));
@@ -687,6 +761,10 @@ int execute_internal_command(const char command[], int redirect) {
             print_command();
         }
     } else if (strcasecmp(command, "chdir") == 0) {
+        if (INPUT_ARGS_COUNT == 1) {
+            printf("Invalid input!");
+            return 0;
+        }
         change_directory(ARGS[1]);
     } else if (strcasecmp(command, "all") == 0) {
         if (redirect == 1) {
@@ -996,6 +1074,7 @@ void execute_external_command(const char command[], int redirect) {
     if (pid < 0) {
         perror("Unable to fork");
         exit(EXIT_FAILURE);
+        EXITCODE = 1;
     } else if (pid == 0) {
         if (redirect == 1) {
             char filename[MAX_LENGTH];
@@ -1014,12 +1093,15 @@ void execute_external_command(const char command[], int redirect) {
                 if (execvp(command, ARGS)) {
                     perror("Exec failed");
                     exit(EXIT_FAILURE);
+                    EXITCODE = 1;
                 }
                 close(fd);
                 exit(EXIT_SUCCESS);
+                EXITCODE = 0;
             } else {
                 perror("Unable to open file");
                 exit(EXIT_FAILURE);
+                EXITCODE = 1;
             }
         } else if (redirect == 2) {
             char filename[MAX_LENGTH];
@@ -1038,18 +1120,22 @@ void execute_external_command(const char command[], int redirect) {
                 if (execvp(command, ARGS)) {
                     perror("Exec failed");
                     exit(EXIT_FAILURE);
+                    EXITCODE = 1;
                 }
                 close(fd);
                 exit(EXIT_SUCCESS);
+                EXITCODE = 0;
             } else {
                 perror("Unable to open file");
                 exit(EXIT_FAILURE);
+                EXITCODE = 1;
             }
 
         } else {
             if (execvp(command, ARGS)) {
                 perror("Exec failed");
                 exit(EXIT_FAILURE);
+                EXITCODE = 1;
             }
         }
     }
