@@ -203,9 +203,9 @@ void get_input_from_terminal() {
                     redirect_type = 1;
                 } else if (strcmp(ARGS[INPUT_ARGS_COUNT - 2], ">>") == 0) {
                     redirect_type = 2;
-                } else if (strcmp(ARGS[INPUT_ARGS_COUNT - 2], "<") == 0) {
+                } else if (strcmp(ARGS[1], "<") == 0) {
                     redirect_type = 3;
-                } else if (strcmp(ARGS[INPUT_ARGS_COUNT - 2], "<<<") == 0) {
+                } else if (strcmp(ARGS[1], "<<<") == 0) {
                     redirect_type = 4;
                 }
             }
@@ -213,7 +213,7 @@ void get_input_from_terminal() {
             char command[10 * MAX_LENGTH] = "";
 
             if (redirect_type == 3) {
-                char filename[MAX_LENGTH];
+                char filename[MAX_LENGTH] = "";
                 strncpy(filename, ARGS[INPUT_ARGS_COUNT - 1], strlen(ARGS[INPUT_ARGS_COUNT - 1]));
 
                 FILE *openFile;
@@ -226,9 +226,7 @@ void get_input_from_terminal() {
                 } else {
                     while (fgets(line, sizeof(line), openFile) != NULL) {
                         strcat(file, line);
-                        printf("Line: %s\n", line);
                         clear_string(line, (int) strlen(line));
-                        printf("Empty line: %s\n", line);
                     }
 
                     file_length = (int) strlen(file);
@@ -244,7 +242,34 @@ void get_input_from_terminal() {
 
                     fclose(openFile);
 
+                    clear_string(filename, (int) strlen(filename));
                     clear_string(file, file_length);
+                }
+            } else if (redirect_type == 4) {
+                if (INPUT_ARGS_COUNT == 3) {
+                    clear_string(ARGS[1], (int) strlen(ARGS[1]));
+                    ARGS[1] = ARGS[2];
+                    ARGS[2] = NULL;
+                    INPUT_ARGS_COUNT--;
+                    strncpy(ARGS[1], &ARGS[1][1], strlen(ARGS[1]));
+                    ARGS[1][(int) strlen(ARGS[1])] = '\0';
+                    ARGS[1][(int) strlen(ARGS[1]) - 1] = '\0';
+                } else if (INPUT_ARGS_COUNT > 3) {
+                    clear_string(ARGS[1], (int) strlen(ARGS[1]));
+                    for (int i = 1; i < INPUT_ARGS_COUNT - 1; i++) {
+                        ARGS[i] = ARGS[i + 1];
+                    }
+
+                    INPUT_ARGS_COUNT = INPUT_ARGS_COUNT - 1;
+
+                    if (ARGS[1][0] == '\'') {
+                        strncpy(ARGS[1], &ARGS[1][1], strlen(ARGS[1]));
+                        ARGS[1][(int) strlen(ARGS[1])] = '\0';
+                    }
+
+                    if (ARGS[INPUT_ARGS_COUNT - 1][(int) strlen(ARGS[INPUT_ARGS_COUNT - 1]) - 1] == '\'') {
+                        ARGS[INPUT_ARGS_COUNT - 1][(int) strlen(ARGS[INPUT_ARGS_COUNT - 1]) - 1] = '\0';
+                    }
                 }
             }
 
@@ -260,12 +285,11 @@ void get_input_from_terminal() {
             }
 
             clear_and_null_args();
+            clear_string(command, (int) strlen(command));
         }
 
         clear_string(input, input_length);
         linenoiseFree(input);
-
-
     }
 }
 
