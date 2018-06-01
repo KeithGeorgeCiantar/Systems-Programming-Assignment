@@ -26,6 +26,7 @@ char HOME[MAX_LENGTH] = {0};
 char SHELL[MAX_LENGTH] = {0};
 char TERMINAL[MAX_LENGTH] = {0};
 int EXITCODE = 0;
+char EXITCODE_S[MAX_LENGTH] = "0";
 
 //user created variables
 char USER_VAR_NAMES[MAX_LENGTH][MAX_LENGTH];
@@ -636,6 +637,9 @@ char *get_variable_value(const char var_name[]) {
         return SHELL;
     } else if (strcmp(var_name, "TERMINAL") == 0) {
         return TERMINAL;
+    } else if (strcmp(var_name, "EXITCODE") == 0) {
+        sprintf(EXITCODE_S, "%d", EXITCODE);
+        return EXITCODE_S;
     } else {
         for (int i = 0; i < VAR_COUNT; i++) {
             if (strcmp(USER_VAR_NAMES[i], var_name) == 0) {
@@ -683,7 +687,7 @@ void print_standard_variables() {
     printf("HOME=%s\n", HOME);
     printf("SHELL=%s\n", SHELL);
     printf("TERMINAL=%s\n", TERMINAL);
-    printf("EXITCODE=%d\n", EXITCODE);
+    printf("EXITCODE=%s\n", EXITCODE_S);
 }
 
 //function which prints all the user created variables
@@ -1196,6 +1200,8 @@ void change_directory(char path[]) {
 
 //function to run a simple fork-plus-exec to execute external commands
 void execute_external_command(const char command[], int redirect) {
+    int wait_val;
+
     //fork the main branch
     pid_t pid = fork();
 
@@ -1203,7 +1209,6 @@ void execute_external_command(const char command[], int redirect) {
     if (pid < 0) {
         perror("Unable to fork");
         exit(EXIT_FAILURE);
-        EXITCODE = 1;
     } else if (pid == 0) { //if the fork is valid, check if it is in the child
         if (redirect == 1) { //check if the output has been redirected using '>'
             char filename[MAX_LENGTH];
@@ -1225,16 +1230,13 @@ void execute_external_command(const char command[], int redirect) {
                 if (execvp(command, ARGS)) {
                     perror("Exec failed");
                     exit(EXIT_FAILURE);
-                    EXITCODE = 1;
                 }
                 //close the file
                 close(fd);
                 exit(EXIT_SUCCESS);
-                EXITCODE = 0;
             } else {
                 perror("Unable to open file");
                 exit(EXIT_FAILURE);
-                EXITCODE = 1;
             }
         } else if (redirect == 2) { //check if the output has been redirected using '>>'
             char filename[MAX_LENGTH];
@@ -1256,25 +1258,28 @@ void execute_external_command(const char command[], int redirect) {
                 if (execvp(command, ARGS)) {
                     perror("Exec failed");
                     exit(EXIT_FAILURE);
-                    EXITCODE = 1;
                 }
                 //close the file
                 close(fd);
                 exit(EXIT_SUCCESS);
-                EXITCODE = 0;
             } else {
                 perror("Unable to open file");
                 exit(EXIT_FAILURE);
-                EXITCODE = 1;
             }
         } else { //if the output has not been redirected, execute normally
             if (execvp(command, ARGS)) {
                 perror("Exec failed");
                 exit(EXIT_FAILURE);
-                EXITCODE = 1;
             }
         }
     }
 
-    wait(NULL);
+    wait(&wait_val);
+
+    if (WIFEXITED(wait_val)) {
+        EXITCODE = WEXITSTATUS(wait_val);
+    }
+
+    clear_string(EXITCODE_S, (int) strlen(EXITCODE_S));
+    sprintf(EXITCODE_S, "%d", EXITCODE);
 }
