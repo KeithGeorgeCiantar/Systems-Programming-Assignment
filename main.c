@@ -753,7 +753,7 @@ int execute_internal_command(const char command[], int redirect) {
         exit_terminal = 1;
     } else if (strcasecmp(command, "print") == 0) {
         if (INPUT_ARGS_COUNT == 1) {
-            printf("Invalid input!");
+            printf("Invalid input!\n");
             return 0;
         }
 
@@ -836,7 +836,7 @@ int execute_internal_command(const char command[], int redirect) {
     } else if (strcasecmp(command, "chdir") == 0) {
         //check the input is valid
         if (INPUT_ARGS_COUNT == 1) {
-            printf("Invalid input!");
+            printf("Invalid input!\n");
             return 0;
         }
         //execute the chdir command
