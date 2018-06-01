@@ -2,13 +2,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <pwd.h>
-#include <limits.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <sys/stat.h>
 #include "linenoise.h"
 
 #define MAX_LENGTH 512
@@ -252,12 +248,15 @@ void get_input_from_terminal() {
                     perror("Cannot open file");
                 } else {
                     while (fgets(line, sizeof(line), openFile) != NULL) {
+                        if (line[(int) strlen(line) - 1] == '\n') {
+                            line[(int) strlen(line) - 1] = ' ';
+                        }
                         strcat(file, line);
                         clear_string(line, (int) strlen(line));
                     }
 
                     file_length = (int) strlen(file);
-                    if (file[file_length - 1] == '\n') {
+                    if (file[file_length - 1] == ' ' || file[file_length - 1] == '\n') {
                         file[file_length - 1] = '\0';
                     }
 
@@ -392,12 +391,15 @@ void get_input_from_file(const char filename[]) {
                         perror("Cannot open file");
                     } else {
                         while (fgets(redirect_line, sizeof(redirect_line), redirectFile) != NULL) {
+                            if (line[(int)strlen(line) - 1] == '\n'){
+                                line[(int)strlen(line) - 1] = ' ';
+                            }
                             strcat(file, redirect_line);
                             clear_string(redirect_line, (int) strlen(redirect_line));
                         }
 
                         file_length = (int) strlen(file);
-                        if (file[file_length - 1] == '\n') {
+                        if (file[file_length - 1] == ' ' || file[file_length - 1] == '\n'){
                             file[file_length - 1] = '\0';
                         }
 
@@ -1011,7 +1013,7 @@ void print_command() {
                 if (ARGS[i][0] == '"') {
                     //check for $ after "
                     if (ARGS[i][1] == '$') {
-                        //check for a punctuation mark exactly at the of '$VAR'
+                        //check for a punctuation mark exactly at the end of '$VAR'
                         if (ARGS[i][(int) strlen(ARGS[i]) - 1] == ',' ||
                             ARGS[i][(int) strlen(ARGS[i]) - 1] == '.' ||
                             ARGS[i][(int) strlen(ARGS[i]) - 1] == '!' ||
@@ -1034,9 +1036,9 @@ void print_command() {
                         printf("%s ", &ARGS[i][1]);
                     }
                 } else if (ARGS[i][(int) strlen(ARGS[i]) - 1] == '"') { //check for " at end of word
-                    //check for $ after "
+                    //check for $ at the beginning
                     if (ARGS[i][0] == '$') {
-                        //check for a punctuation mark exactly at the of '$VAR'
+                        //check for a punctuation mark exactly at the end of '$VAR'
                         if (ARGS[i][(int) strlen(ARGS[i]) - 2] == ',' ||
                             ARGS[i][(int) strlen(ARGS[i]) - 2] == '.' ||
                             ARGS[i][(int) strlen(ARGS[i]) - 2] == '!' ||
