@@ -656,7 +656,7 @@ char *get_variable_value(const char var_name[]) {
     }
 }
 
-//function which returns the value of the variable when the input received is '$value'
+//function which returns the value of the variable when the input received is '$VAR'
 char *get_value_after_dollar(char input[], int input_length) {
     char var_after_dollar[MAX_LENGTH] = {0};
 
