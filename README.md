@@ -1,4 +1,4 @@
-# Custom Linux Shell - Eggshell
+# Custom Linux Shell (Eggshell) Project
 
 This is the assignment for CPS1012 (Operating Systems and Systems Programming 1).
 
